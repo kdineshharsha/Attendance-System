@@ -1,0 +1,10 @@
+backup_main
+__pycache__/
+design2.ui
+main.py
+*.jpeg
+*.jpg
+*.png
+*.db
+shape_predictor_68_face_landmarks.dat
+dataset
