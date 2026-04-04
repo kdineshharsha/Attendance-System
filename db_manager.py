@@ -40,10 +40,22 @@ class DBManager:
                 date TEXT NOT NULL,
                 in_time TEXT NOT NULL,
                 out_time TEXT,
-                early_leave BOOLEAN DEFAULT 0,
                 FOREIGN KEY (user_id) REFERENCES users (id)
             )
         """
+        )
+
+        cursor.execute(
+            """
+                CREATE TABLE IF NOT EXISTS leaves(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                date TEXT NOT NULL,
+                leave_type TEXT NOT NULL,
+                reason TEXT,
+                FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+            """
         )
 
     def add_user(self, id, name, age, details, embedding):
@@ -51,10 +63,6 @@ class DBManager:
         cursor = conn.cursor()
         embedding_list = embedding.tolist()
         embedding_json = json.dumps(embedding_list)
-
-        # Add a comment for the face_recognition insted of deepface
-        # embedding_json = json.dumps(embedding)
-        print(embedding_json)
 
         cursor.execute(
             """
@@ -87,18 +95,63 @@ class DBManager:
             users_data.append(user)
         return users_data
 
-    def grant_early_leave(self, user_id):
+    def add_leave(self, user_id, date, leave_type, reason):
         conn = self.get_connection()
         cursor = conn.cursor()
-        current_date = datetime.now().strftime("%Y-%m-%d")
 
         cursor.execute(
-            "UPDATE attendance SET early_leave = 1 WHERE user_id = ? AND date = ?",
-            (user_id, current_date),
+            "SELECT id FROM leaves WHERE user_id = ? AND date = ?", (user_id, date)
+        )
+        if cursor.fetchone():
+            conn.close()
+            return False
+
+        cursor.execute(
+            """
+            INSERT INTO leaves (user_id, date, leave_type, reason)
+            VALUES (?, ?, ?, ?)
+        """,
+            (user_id, date, leave_type, reason),
         )
         conn.commit()
         conn.close()
-        print(f"[DB] Early leave granted for user {user_id} on {current_date}")
+        print(f"[DB] Leave added for user {user_id} on {date}")
+        return True
+
+    def get_all_leaves(self):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT l.id, l.user_id, u.name, l.date, l.leave_type, l.reason
+            FROM leaves l
+            JOIN users u ON l.user_id = u.id
+            ORDER BY l.date DESC
+        """
+        )
+        rows = cursor.fetchall()
+        leaves_data = []
+        for row in rows:
+            leave = {
+                "id": row[0],
+                "user_id": row[1],
+                "name": row[2],
+                "date": row[3],
+                "leave_type": row[4],
+                "reason": row[5],
+            }
+            leaves_data.append(leave)
+        conn.close()
+        return leaves_data
+
+    def revoke_leave(self, leave_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM leaves WHERE id = ?", (leave_id,))
+        conn.commit()
+        conn.close()
+        print(f"[DB] Leave {leave_id} revoked!")
+        return True
 
     def mark_attendance(self, user_id, manual_out=False):
         conn = self.get_connection()
@@ -109,7 +162,7 @@ class DBManager:
         current_date = now.strftime("%Y-%m-%d")
 
         cursor.execute(
-            "SELECT id, in_time, out_time,early_leave FROM attendance WHERE user_id = ? AND date = ?",
+            "SELECT id, in_time, out_time FROM attendance WHERE user_id = ? AND date = ?",
             (user_id, current_date),
         )
         record = cursor.fetchone()
@@ -123,13 +176,23 @@ class DBManager:
             status = "IN"
 
         else:
-            record_id, in_time, out_time, early_leave = record
+            record_id, in_time, out_time = record
 
             if out_time is None:
 
-                past_12_30 = now.hour > 12 or (now.hour == 12 and now.minute >= 30)
+                cursor.execute(
+                    "SELECT leave_type FROM leaves WHERE user_id = ? AND date = ?",
+                    (user_id, current_date),
+                )
+                leave_record = cursor.fetchone()
+                has_early_leave = False
+                if leave_record and leave_record[0] == "Early Leave":
+                    has_early_leave = True
+
+                past_12_00 = now.hour > 12 or (now.hour == 12 and now.minute >= 30)
+                # before_12_00 = now.hour < 12 or (now.hour == 12 and now.minute < 30)
                 past_5_00 = now.hour > 17 or (now.hour == 17 and now.minute >= 0)
-                if past_12_30 and early_leave == 1:
+                if past_12_00 and has_early_leave == 1:
                     cursor.execute(
                         "UPDATE attendance SET out_time = ? WHERE id = ?",
                         (current_time, record_id),
@@ -164,7 +227,7 @@ class DBManager:
 
         cursor.execute(
             """
-            SELECT u.id, u.name, u.age, u.details, a.in_time, a.out_time, a.early_leave
+            SELECT u.id, u.name, u.age, u.details, a.in_time, a.out_time
             FROM users u
             LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
         """,
@@ -182,35 +245,37 @@ class DBManager:
                 "early_leave": bool(row[4]),
             }
             users_data.append(user)
-        print(users_data)
         return users_data
 
     def get_attendance_for_table(self):
         conn = self.get_connection()
         cursor = conn.cursor()
+        today = datetime.now().strftime("%Y-%m-%d")
 
         cursor.execute(
             """
-            SELECT  a.user_id,u.name , a.in_time, a.out_time, a.early_leave
+            SELECT a.user_id, u.name, a.in_time, a.out_time, l.leave_type
             FROM attendance a
             JOIN users u ON a.user_id = u.id
-            ORDER BY a.date DESC, a.in_time DESC
-        """
+            LEFT JOIN leaves l ON a.user_id = l.user_id AND a.date = l.date
+            WHERE a.date = ?
+            ORDER BY a.in_time DESC
+        """,
+            (today,),
         )
+
         rows = cursor.fetchall()
-        # print(rows)
         attendance_data = []
         for row in rows:
             record = {
-                # "date": row[0],
                 "user_id": row[0],
                 "name": row[1],
                 "in_time": row[2],
                 "out_time": row[3],
-                "early_leave": bool(row[4]),
+                "leave_type": row[4],
             }
             attendance_data.append(record)
-        # print(f"{attendance_data}")
+        conn.close()
         return attendance_data
 
 

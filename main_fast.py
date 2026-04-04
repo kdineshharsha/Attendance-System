@@ -1,3 +1,6 @@
+from calendar import c
+import dis
+from math import e
 from operator import le
 import os
 import re
@@ -5,12 +8,13 @@ import face_recognition
 import multiprocessing as mp
 import sys
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtCore import QFile, Qt, QThread, Signal
+from PySide6.QtCore import QFile, Qt, QThread, Signal, QDate
 from PySide6.QtWidgets import (
     QApplication,
     QMessageBox,
     QFileDialog,
     QTableWidgetItem,
+    QCompleter,
 )
 
 from scipy.datasets import face
@@ -19,7 +23,7 @@ from db_manager import DBManager
 from PySide6.QtGui import QPixmap, QImage
 import cv2
 import numpy as np
-
+from datetime import datetime, timedelta
 
 # os.environ["OMP_NUM_THREADS"] = "8"
 # os.environ["TF_NUM_INTRAOP_THREADS"] = "8"
@@ -173,10 +177,14 @@ class AttendanceSystem:
         self.ui.btn_scan_start.clicked.connect(self.start_camera)
         self.ui.btn_scan_stop.clicked.connect(self.stop_camera)
         self.ui.btn_user_edit.clicked.connect(self.handle_edit_user)
-        self.ui.btn_user_leave.clicked.connect(self.handle_early_leave)
+        self.ui.btn_leave_save.clicked.connect(self.handle_add_leave)
         self.ui.btn_refresh_att.clicked.connect(self.load_all_attendance)
+        self.ui.btn_leave_delete.clicked.connect(self.handle_delete_leave)
         self.load_all_users()
         self.load_all_attendance()
+        self.load_all_leaves()
+        self.ui.dateEdit_leave.setDate(QDate.currentDate())
+        self.load_users_to_leave_dropdown()
 
     def upload_photo(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -227,7 +235,7 @@ class AttendanceSystem:
             self.ui.table_users.setItem(row_idx, 2, QTableWidgetItem(str(user["age"])))
             self.ui.table_users.setItem(row_idx, 3, QTableWidgetItem(user["details"]))
             leave_status = user["early_leave"]
-            print(leave_status)
+
             if leave_status == True:
                 self.ui.table_users.setItem(row_idx, 4, QTableWidgetItem("✅ Granted"))
             else:
@@ -262,35 +270,63 @@ class AttendanceSystem:
         self.db.grant_early_leave(user_id)
         self.load_all_users()
 
-    def handle_early_leave(self):
-        row = self.ui.table_users.currentRow()
-        if row < 0:
+    def handle_add_leave(self):
+
+        user_id = self.ui.combo_leave_user.currentData()
+
+        if not user_id:
             QMessageBox.warning(
-                self.ui, "Selection Error", "Please select a user to mark early leave."
+                self.ui, "Selection Error", "Please select a user to add leave."
             )
             return
-        user_id = self.ui.table_users.item(row, 0).text()
-        user_name = self.ui.table_users.item(row, 1).text()
 
-        reply = QMessageBox.question(
-            self.ui,
-            "Confirm Early Leave",
-            f"Are you sure you want to mark {user_name} (ID: {user_id}) as left early?",
-            QMessageBox.Yes | QMessageBox.No,
-        )
+        date = self.ui.dateEdit_leave.date().toString("yyyy-MM-dd")
+        leave_type = self.ui.combo_leave_type.currentText()
+        reason = self.ui.txt_leave_reason.toPlainText().strip()
 
-        if reply == QMessageBox.Yes:
-            self.db.grant_early_leave(user_id)
-            self.load_all_users()
+        success = self.db.add_leave(user_id, date, leave_type, reason)
 
-            print(f"Marking {user_name} (ID: {user_id}) as left early.")
+        if success:
+            QMessageBox.information(self.ui, "Success", "Leave added successfully.")
+            self.ui.combo_leave_user.setCurrentIndex(0)
+            self.ui.dateEdit_leave.setDate(QDate.currentDate())
+            self.ui.combo_leave_type.setCurrentIndex(0)
+            self.ui.txt_leave_reason.clear()
+            self.load_all_leaves()
+        else:
+            QMessageBox.warning(
+                self.ui,
+                f"[⚠️ WARNING] A leave is already recorded for this user on {date}.",
+            )
+
+    def handle_delete_leave(self):
+        selected_row = self.ui.table_leaves.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(
+                self.ui, "Selection Error", "Please select a leave record to delete."
+            )
+            return
+        name_item = self.ui.table_leaves.item(selected_row, 0)
+
+        leave_id = name_item.data(Qt.UserRole)
+        success = self.db.revoke_leave(leave_id)
+        if success:
+            QMessageBox.information(self.ui, "Success", "Leave revoked successfully.")
+            self.load_all_leaves()
 
     def load_all_attendance(self):
         attendance_data = self.db.get_attendance_for_table()
         self.ui.table_attendance.setRowCount(len(attendance_data))
         self.ui.table_attendance.setColumnWidth(0, 150)
+        self.ui.table_attendance.setColumnWidth(1, 150)
         print(attendance_data)
         for row_idx, attendance_record in enumerate(attendance_data):
+
+            in_time_str = attendance_record["in_time"]
+            out_time_str = attendance_record["out_time"]
+            late_time, ot_time = self.calculate_times(in_time_str, out_time_str)
+            print(late_time, ot_time)
+
             # print(attendance_record)
             self.ui.table_attendance.setItem(
                 row_idx, 0, QTableWidgetItem(attendance_record["user_id"])
@@ -305,15 +341,92 @@ class AttendanceSystem:
             self.ui.table_attendance.setItem(
                 row_idx, 3, QTableWidgetItem(attendance_record["out_time"] or "--")
             )
-            early_leave_status = attendance_record["early_leave"]
-            if early_leave_status == True:
+
+            late_val, ot_val = self.calculate_times(in_time_str, out_time_str)
+            if late_val != "--":
                 self.ui.table_attendance.setItem(
-                    row_idx, 4, QTableWidgetItem("✅ Granted")
+                    row_idx, 4, QTableWidgetItem(f"-{late_val}")
                 )
+            elif ot_val != "--":
+                self.ui.table_attendance.setItem(row_idx, 4, QTableWidgetItem(ot_val))
             else:
-                self.ui.table_attendance.setItem(
-                    row_idx, 4, QTableWidgetItem("❌ None")
-                )
+                self.ui.table_attendance.setItem(row_idx, 4, QTableWidgetItem("-"))
+            early_leave_status = attendance_record["leave_type"]
+            status_item = QTableWidgetItem()
+            if attendance_record.get("leave_type") == "Early Leave":
+                status_item.setText("🟡 Early Left")
+            elif late_val != "--":
+                status_item.setText("🔴 Late")
+            else:
+                status_item.setText("🟢 On Time")
+
+            self.ui.table_attendance.setItem(row_idx, 5, status_item)
+
+    def load_all_leaves(self):
+        leaves_data = self.db.get_all_leaves()
+        self.ui.table_leaves.setRowCount(len(leaves_data))
+
+        self.ui.table_leaves.setColumnWidth(0, 150)  # User Info
+        self.ui.table_leaves.setColumnWidth(1, 150)  # Name
+        self.ui.table_leaves.setColumnWidth(2, 100)  # Date
+        self.ui.table_leaves.setColumnWidth(3, 120)  # Type
+        self.ui.table_leaves.setColumnWidth(4, 200)  # Notes
+
+        for row_idx, leave in enumerate(leaves_data):
+            name_item = QTableWidgetItem(leave["user_id"])
+
+            name_item.setData(Qt.UserRole, leave["id"])
+            self.ui.table_leaves.setItem(row_idx, 0, name_item)
+            self.ui.table_leaves.setItem(row_idx, 1, QTableWidgetItem(leave["name"]))
+            self.ui.table_leaves.setItem(row_idx, 2, QTableWidgetItem(leave["date"]))
+            self.ui.table_leaves.setItem(
+                row_idx, 3, QTableWidgetItem(leave["leave_type"])
+            )
+            self.ui.table_leaves.setItem(
+                row_idx, 4, QTableWidgetItem(leave["reason"] or "--")
+            )
+
+    def calculate_times(self, in_time_str, out_time_str):
+        shift_start = datetime.strptime("08:00:00", "%H:%M:%S")
+        shift_end = datetime.strptime("17:00:00", "%H:%M:%S")
+
+        grace_period = timedelta(minutes=5)
+        min_ot = timedelta(minutes=30)
+
+        late_time = "--"
+        ot_time = "--"
+
+        if in_time_str:
+            in_time = datetime.strptime(in_time_str, "%H:%M:%S")
+            if in_time > (shift_start + grace_period):
+                late_time = str(in_time - shift_start).split(".")[0]
+                print(f"Late by: {late_time}")
+
+        if out_time_str:
+            out_time = datetime.strptime(out_time_str, "%H:%M:%S")
+            if out_time > (shift_end + min_ot):
+                ot_time = str(out_time - shift_end).split(".")[0]
+                print(f"Overtime: {ot_time}")
+        print(f"Calculated times - Late: {late_time}, OT: {ot_time}")
+        return late_time, ot_time
+
+    def load_users_to_leave_dropdown(self):
+        self.ui.combo_leave_user.clear()
+
+        self.ui.combo_leave_user.addItem("-- Select User --", None)
+
+        users = self.db.get_users_for_table()
+        search_list = []
+
+        for user in users:
+            display_text = f"{user['name']} (ID: {user['id']})"
+            self.ui.combo_leave_user.addItem(display_text, user["id"])
+            search_list.append(display_text)
+
+        completer = QCompleter(search_list)
+        completer.setCaseSensitivity(Qt.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchContains)
+        self.ui.combo_leave_user.setCompleter(completer)
 
     def start_camera(self):
         users_data = self.db.load_users()
@@ -420,6 +533,7 @@ class AttendanceSystem:
         self.ui.btn_reg_save.setText("💾 Save to Database")
         self.reg_img_path = ""
         self.load_all_users()
+        self.load_all_attendance()
 
     def on_reg_error(self, error_msg):
         if error_msg == "Face Not Detected":
