@@ -278,6 +278,69 @@ class DBManager:
         conn.close()
         return attendance_data
 
+    def get_attendance_by_date_range(self, start_date, end_date):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT a.user_id, u.name, a.date, a.in_time, a.out_time, l.leave_type
+            FROM attendance a
+            JOIN users u ON a.user_id = u.id
+            LEFT JOIN leaves l ON a.user_id = l.user_id AND a.date = l.date
+            WHERE a.date BETWEEN ? AND ?
+            ORDER BY a.date ASC, a.in_time ASC
+        """,
+            (start_date, end_date),
+        )
+
+        rows = cursor.fetchall()
+        attendance_data = []
+        for row in rows:
+            record = {
+                "user_id": row[0],
+                "name": row[1],
+                "date": row[2],
+                "in_time": row[3],
+                "out_time": row[4],
+                "leave_type": row[5],
+            }
+            attendance_data.append(record)
+        conn.close()
+        return attendance_data
+
+    def get_leaves_by_date_range(self, start_date, end_date):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            """
+            SELECT l.id, l.user_id, u.name, l.date, l.leave_type, l.reason
+            FROM leaves l
+            JOIN users u ON l.user_id = u.id
+            WHERE l.date BETWEEN ? AND ?
+            ORDER BY l.date ASC
+        """,
+            (start_date, end_date),
+        )
+
+        rows = cursor.fetchall()
+        leaves_data = []
+        for row in rows:
+            leaves_data.append(
+                {
+                    "leave_id": str(row[0]),
+                    "user_id": row[1],
+                    "name": row[2],
+                    "date": row[3],
+                    "leave_type": row[4],
+                    "reason": row[5],
+                }
+            )
+
+        conn.close()
+        return leaves_data
+
 
 if __name__ == "__main__":
     db = DBManager()

@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 from scipy.datasets import face
 from sympy import Q, use
 from db_manager import DBManager
-from PySide6.QtGui import QPixmap, QImage
+from PySide6.QtGui import QPixmap, QImage, QColor
 import cv2
 import numpy as np
 from datetime import datetime, timedelta
@@ -180,6 +180,13 @@ class AttendanceSystem:
         self.ui.btn_leave_save.clicked.connect(self.handle_add_leave)
         self.ui.btn_refresh_att.clicked.connect(self.load_all_attendance)
         self.ui.btn_leave_delete.clicked.connect(self.handle_delete_leave)
+        self.ui.btn_generate_report.clicked.connect(self.handle_generate_report)
+        current_date = QDate.currentDate()
+        self.ui.dateEdit_from.setDate(
+            QDate(current_date.year(), current_date.month(), 1)
+        )
+        self.ui.dateEdit_to.setDate(current_date)
+        self.update_dashboard()
         self.load_all_users()
         self.load_all_attendance()
         self.load_all_leaves()
@@ -220,6 +227,35 @@ class AttendanceSystem:
         self.reg_thread.success_signal.connect(self.on_reg_success)
         self.reg_thread.error_signal.connect(self.on_reg_error)
         self.reg_thread.start()
+
+    def update_dashboard(self):
+        users = self.db.load_users()
+        attendance = self.db.get_attendance_for_table()
+        leaves = self.db.get_all_leaves()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
+        total_users = len(users)
+        present_today = len(attendance)
+
+        late_count = 0
+        shift_start = datetime.strptime("08:00:00", "%H:%M:%S")
+        grace_period = timedelta(minutes=5)
+
+        for record in attendance:
+            if record["in_time"]:
+                try:
+                    in_time = datetime.strptime(record["in_time"], "%H:%M:%S")
+                    if in_time > (shift_start + grace_period):
+                        late_count += 1
+                except:
+                    pass
+
+        on_leave_today = sum(1 for leave in leaves if leave["date"] == today_str)
+
+        self.ui.val_total.setText(str(total_users))
+        self.ui.val_present.setText(str(present_today))
+        self.ui.val_late.setText(str(late_count))
+        self.ui.val_leave.setText(str(on_leave_today))
 
     def load_all_users(self):
         users_data = self.db.get_users_for_table()
@@ -325,7 +361,6 @@ class AttendanceSystem:
             in_time_str = attendance_record["in_time"]
             out_time_str = attendance_record["out_time"]
             late_time, ot_time = self.calculate_times(in_time_str, out_time_str)
-            print(late_time, ot_time)
 
             # print(attendance_record)
             self.ui.table_attendance.setItem(
@@ -396,13 +431,13 @@ class AttendanceSystem:
         late_time = "--"
         ot_time = "--"
 
-        if in_time_str:
+        if in_time_str and in_time_str != "--":
             in_time = datetime.strptime(in_time_str, "%H:%M:%S")
             if in_time > (shift_start + grace_period):
                 late_time = str(in_time - shift_start).split(".")[0]
                 print(f"Late by: {late_time}")
 
-        if out_time_str:
+        if out_time_str and out_time_str != "--":
             out_time = datetime.strptime(out_time_str, "%H:%M:%S")
             if out_time > (shift_end + min_ot):
                 ot_time = str(out_time - shift_end).split(".")[0]
@@ -427,6 +462,86 @@ class AttendanceSystem:
         completer.setCaseSensitivity(Qt.CaseInsensitive)
         completer.setFilterMode(Qt.MatchContains)
         self.ui.combo_leave_user.setCompleter(completer)
+
+    def handle_generate_report(self):
+        start_date = self.ui.dateEdit_from.date().toString("yyyy-MM-dd")
+        end_date = self.ui.dateEdit_to.date().toString("yyyy-MM-dd")
+        report_type = self.ui.combo_report_type.currentText()
+
+        print(f"Generating {report_type} report from {start_date} to {end_date}...")
+
+        self.ui.table_report_preview.clear()
+        self.ui.btn_export_xl.setEnabled(False)
+
+        if report_type == "Detailed Attendance":
+            self.generate_detailed_attendance_report(start_date, end_date)
+        elif report_type == "Leave History":
+            print("Generating Leave History report...")
+
+    def generate_detailed_attendance_report(self, start_date, end_date):
+
+        data = self.db.get_attendance_by_date_range(start_date, end_date)
+
+        self.ui.table_report_preview.setColumnCount(7)
+        self.ui.table_report_preview.setHorizontalHeaderLabels(
+            ["Date", "Emp ID", "Name", "IN Time", "OUT Time", "Late / OT", "Status"]
+        )
+        self.ui.table_report_preview.setRowCount(len(data))
+
+        self.ui.table_report_preview.setColumnWidth(0, 100)  # Date
+        self.ui.table_report_preview.setColumnWidth(1, 100)  # ID
+        self.ui.table_report_preview.setColumnWidth(2, 180)  # Name
+        self.ui.table_report_preview.setColumnWidth(3, 100)  # IN
+        self.ui.table_report_preview.setColumnWidth(4, 100)  # OUT
+        self.ui.table_report_preview.setColumnWidth(5, 150)  # Late/OT
+        self.ui.table_report_preview.setColumnWidth(6, 120)  # Status
+
+        for row_idx, record in enumerate(data):
+            in_time = record["in_time"] or "--"
+            out_time = record["out_time"] or "--"
+
+            late_val, ot_val = self.calculate_times(in_time, out_time)
+
+            late_ot_item = QTableWidgetItem()
+            if late_val != "--":
+                late_ot_item.setText(late_val)
+                late_ot_item.setForeground(QColor("#f38ba8"))  # රතු පාටින්
+            elif ot_val != "--":
+                late_ot_item.setText(ot_val)
+                late_ot_item.setForeground(QColor("#a6e3a1"))  # කොළ පාටින්
+            else:
+                late_ot_item.setText("-")
+
+            status_item = QTableWidgetItem()
+            if record["leave_type"] == "Early Leave":
+                status_item.setText("🟡 Early Left")
+            elif late_val != "--":
+                status_item.setText("🔴 Late")
+            else:
+                status_item.setText("🟢 Present")
+
+            self.ui.table_report_preview.setItem(
+                row_idx, 0, QTableWidgetItem(record["date"])
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 1, QTableWidgetItem(record["user_id"])
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 2, QTableWidgetItem(record["name"])
+            )
+            self.ui.table_report_preview.setItem(row_idx, 3, QTableWidgetItem(in_time))
+            self.ui.table_report_preview.setItem(row_idx, 4, QTableWidgetItem(out_time))
+            self.ui.table_report_preview.setItem(row_idx, 5, late_ot_item)
+            self.ui.table_report_preview.setItem(row_idx, 6, status_item)
+
+        if len(data) > 0:
+            self.ui.btn_export_xl.setEnabled(True)
+        else:
+            QMessageBox.information(
+                self.ui,
+                "No Data",
+                f"No attendance records found between {start_date} and {end_date}.",
+            )
 
     def start_camera(self):
         users_data = self.db.load_users()
