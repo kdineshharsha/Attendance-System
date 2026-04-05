@@ -8,7 +8,7 @@ import face_recognition
 import multiprocessing as mp
 import sys
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtCore import QFile, Qt, QThread, Signal, QDate
+from PySide6.QtCore import QFile, Qt, QThread, Signal, QDate, QTime
 from PySide6.QtWidgets import (
     QApplication,
     QMessageBox,
@@ -185,6 +185,19 @@ class AttendanceSystem:
         self.ui.btn_leave_delete.clicked.connect(self.handle_delete_leave)
         self.ui.btn_generate_report.clicked.connect(self.handle_generate_report)
         self.ui.btn_export_xl.clicked.connect(self.export_to_excel)
+        self.ui.btn_save_settings.clicked.connect(self.save_settings)
+
+        self.ui.btn_nav_dashboard.clicked.connect(lambda: self.switch_page(0))
+        self.ui.btn_nav_scan.clicked.connect(lambda: self.switch_page(1))
+        self.ui.btn_nav_attendance.clicked.connect(lambda: self.switch_page(2))
+        self.ui.btn_nav_users.clicked.connect(lambda: self.switch_page(3))
+        self.ui.btn_nav_reports.clicked.connect(lambda: self.switch_page(4))
+        self.ui.btn_nav_settings.clicked.connect(lambda: self.switch_page(5))
+        self.current_settings = self.db.get_settings()
+        self.load_settings_to_ui()
+
+        self.switch_page(0)
+
         current_date = QDate.currentDate()
         self.ui.dateEdit_from.setDate(
             QDate(current_date.year(), current_date.month(), 1)
@@ -194,10 +207,33 @@ class AttendanceSystem:
         self.load_all_users()
         self.load_all_attendance()
         self.load_all_leaves()
+
         self.ui.dateEdit_leave.setDate(QDate.currentDate())
         self.load_users_to_leave_dropdown()
         self.last_matched_id = None
         self.no_match_frames = 0
+
+    def switch_page(self, index):
+
+        self.ui.stackedWidget.setCurrentIndex(index)
+
+        default_style = "text-align: left; padding: 12px 20px; font-size: 14px; border-radius: 8px; background-color: transparent; color: #a6adc8;"
+        active_style = "text-align: left; padding: 12px 20px; font-size: 14px; border-radius: 8px; background-color: #89b4fa; color: #11111b; font-weight: bold;"
+
+        buttons = [
+            self.ui.btn_nav_dashboard,
+            self.ui.btn_nav_scan,
+            self.ui.btn_nav_attendance,
+            self.ui.btn_nav_users,
+            self.ui.btn_nav_reports,
+            self.ui.btn_nav_settings,
+        ]
+
+        for i, btn in enumerate(buttons):
+            if i == index:
+                btn.setStyleSheet(active_style)
+            else:
+                btn.setStyleSheet(default_style)
 
     def upload_photo(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -428,11 +464,11 @@ class AttendanceSystem:
             )
 
     def calculate_times(self, in_time_str, out_time_str):
-        shift_start = datetime.strptime("08:00:00", "%H:%M:%S")
-        shift_end = datetime.strptime("17:00:00", "%H:%M:%S")
+        shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
+        shift_end = datetime.strptime(self.current_settings["end"], "%H:%M:%S")
 
-        grace_period = timedelta(minutes=5)
-        min_ot = timedelta(minutes=30)
+        grace_period = timedelta(minutes=self.current_settings["grace"])
+        min_ot = timedelta(minutes=self.current_settings["min_ot"])
 
         late_time = "--"
         ot_time = "--"
@@ -452,10 +488,10 @@ class AttendanceSystem:
         return late_time, ot_time
 
     def calculate_times_in_seconds(self, in_time_str, out_time_str):
-        shift_start = datetime.strptime("08:00:00", "%H:%M:%S")
-        shift_end = datetime.strptime("17:00:00", "%H:%M:%S")
-        grace_period = timedelta(minutes=5)
-        min_ot = timedelta(minutes=30)
+        shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
+        shift_end = datetime.strptime(self.current_settings["end"], "%H:%M:%S")
+        grace_period = timedelta(minutes=self.cuurrent_settings["grace"])
+        min_ot = timedelta(minutes=self.current_settings["min_ot"])
 
         late_seconds = 0
         ot_seconds = 0
@@ -904,6 +940,37 @@ class AttendanceSystem:
         finally:
             self.ui.btn_export_xl.setText("📥 Export to Excel")
             self.ui.btn_export_xl.setEnabled(True)
+
+    def load_settings_to_ui(self):
+
+        start_time = QTime.fromString(self.current_settings["start"], "HH:mm:ss")
+        end_time = QTime.fromString(self.current_settings["end"], "HH:mm:ss")
+
+        self.ui.timeEdit_start.setTime(start_time)
+        self.ui.timeEdit_end.setTime(end_time)
+        self.ui.spin_grace.setValue(self.current_settings["grace"])
+        self.ui.spin_ot.setValue(self.current_settings["min_ot"])
+
+    def save_settings(self):
+
+        start = self.ui.timeEdit_start.time().toString("HH:mm:ss")
+        end = self.ui.timeEdit_end.time().toString("HH:mm:ss")
+        grace = self.ui.spin_grace.value()
+        min_ot = self.ui.spin_ot.value()
+
+        self.db.update_settings(start, end, grace, min_ot)
+
+        self.current_settings = {
+            "start": start,
+            "end": end,
+            "grace": grace,
+            "min_ot": min_ot,
+        }
+
+        QMessageBox.information(
+            self.ui, "Success", "System Settings Updated Successfully!"
+        )
+        self.update_dashboard()
 
     def start_camera(self):
         users_data = self.db.load_users()

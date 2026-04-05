@@ -58,6 +58,27 @@ class DBManager:
             """
         )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                shift_start TEXT DEFAULT "08:00:00",
+                shift_end TEXT DEFAULT "17:00:00",
+                grace_period INTEGER DEFAULT 5,
+                min_ot INTEGER DEFAULT 30
+            )
+        """
+        )
+
+        cursor.execute("SELECT COUNT(*) FROM settings")
+
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(
+                "INSERT INTO settings (shift_start, shift_end, grace_period, min_ot) VALUES ('08:00:00', '17:00:00', 5, 30)"
+            )
+
+        conn.commit()
+
     def add_user(self, id, name, age, details, embedding):
         conn = self.get_connection()
         cursor = conn.cursor()
@@ -340,6 +361,30 @@ class DBManager:
 
         conn.close()
         return leaves_data
+
+    def get_settings(self):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT shift_start, shift_end, grace_period, min_ot FROM settings WHERE id = 1"
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"start": row[0], "end": row[1], "grace": row[2], "min_ot": row[3]}
+        return {"start": "08:00:00", "end": "17:00:00", "grace": 5, "min_ot": 30}
+
+    def update_settings(self, start, end, grace, min_ot):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            UPDATE settings
+            SET shift_start = ?, shift_end = ?, grace_period = ?, min_ot = ?
+            WHERE id = 1
+        """,
+            (start, end, grace, min_ot),
+        )
+        conn.commit()
 
 
 if __name__ == "__main__":
