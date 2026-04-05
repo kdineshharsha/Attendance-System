@@ -277,90 +277,10 @@ class AttendanceSystem:
         self.reg_thread.start()
 
     def update_dashboard(self):
-        users = self.db.load_users()
-        attendance = self.db.get_attendance_for_table()
-        leaves = self.db.get_all_leaves()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-
-        total_users = len(users)
-        present_today = len(attendance)
-
-        late_count = 0
-        shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
-        grace_period = timedelta(minutes=self.current_settings["grace"])
-
-        for record in attendance:
-            if record["in_time"]:
-                try:
-                    in_time = datetime.strptime(record["in_time"], "%H:%M:%S")
-                    if in_time > (shift_start + grace_period):
-                        late_count += 1
-                except:
-                    pass
-
-        on_leave_today = sum(1 for leave in leaves if leave["date"] == today_str)
-        absent_today = total_users - (present_today + on_leave_today)
-        if absent_today < 0:
-            absent_today = 0
-
-        self.ui.val_total.setText(str(total_users))
-        self.ui.val_present.setText(str(present_today))
-        self.ui.val_late.setText(str(late_count))
-        self.ui.val_leave.setText(str(on_leave_today))
-
-        days_labels = []
-        present_counts = []
-        late_counts = []
-        absent_counts = []
-
-        for i in range(4, -1, -1):
-            target_date = datetime.now() - timedelta(days=i)
-            date_str = target_date.strftime("%Y-%m-%d")
-            day_name = target_date.strftime("%a")
-            days_labels.append(day_name)
-
-            daily_att = self.db.get_attendance_by_date_range(date_str, date_str)
-            daily_leaves = self.db.get_leaves_by_date_range(date_str, date_str)
-
-            daily_present = len(daily_att)
-            daily_leave = len(daily_leaves)
-            daily_absent = total_users - (daily_present + daily_leave)
-            if daily_absent < 0:
-                daily_absent = 0
-
-            daily_late = 0
-            for rec in daily_att:
-                late_sec, ot_sec = self.calculate_times_in_seconds(
-                    rec["in_time"], rec["out_time"]
-                )
-                if late_sec > (self.current_settings["grace"] * 60):
-                    daily_late += 1
-
-            present_counts.append(daily_present)
-            late_counts.append(daily_late)
-            absent_counts.append(daily_absent)
-
-            bar_chart_view = self.create_bar_chart(
-                days_labels, present_counts, late_counts, absent_counts
-            )
-
-        if self.ui.chart_container_bar.layout():
-            QWidget().setLayout(self.ui.chart_container_bar.layout())
-
-        bar_layout = QVBoxLayout(self.ui.chart_container_bar)
-        bar_layout.setContentsMargins(0, 0, 0, 0)
-        bar_layout.addWidget(bar_chart_view)
-
-        pie_chart_view = self.create_pie_chart(
-            present_today, late_count, on_leave_today, absent_today
-        )
-
-        if self.ui.chart_container_pie.layout():
-            QWidget().setLayout(self.ui.chart_container_pie.layout())
-
-        pie_layout = QVBoxLayout(self.ui.chart_container_pie)
-        pie_layout.setContentsMargins(0, 0, 0, 0)
-        pie_layout.addWidget(pie_chart_view)
+        today_stats = self._calculate_today_stats()
+        self._update_summary_cards(today_stats)
+        self._check_camera_status()
+        self._update_charts(today_stats)
 
     def create_bar_chart(self, days, present_list, late_list, absent_list):
         set_present = QBarSet("Present")
@@ -653,8 +573,6 @@ class AttendanceSystem:
     def load_users_to_leave_dropdown(self):
         self.ui.combo_leave_user.clear()
 
-        self.ui.combo_leave_user.addItem("-- Select User --", None)
-
         users = self.db.get_users_for_table()
         search_list = []
 
@@ -662,6 +580,9 @@ class AttendanceSystem:
             display_text = f"{user['name']} (ID: {user['id']})"
             self.ui.combo_leave_user.addItem(display_text, user["id"])
             search_list.append(display_text)
+        self.ui.combo_leave_user.lineEdit().setPlaceholderText("-- Select User --")
+
+        self.ui.combo_leave_user.setCurrentIndex(-1)
 
         completer = QCompleter(search_list)
         completer.setCaseSensitivity(Qt.CaseInsensitive)
@@ -1244,6 +1165,110 @@ class AttendanceSystem:
             print(f"Registration Error: {error_msg}")
         self.ui.btn_reg_save.setEnabled(True)
         self.ui.btn_reg_save.setText("💾 Save to Database")
+
+    def _check_camera_status(self):
+        try:
+            cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+
+            if cap is None or not cap.isOpened():
+                return False
+
+            cap.release()
+
+            self.ui.lbl_stat_cam.setText("📷 Camera Module: Ready")
+            self.ui.lbl_stat_cam.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+            self.ui.btn_scan_start.setEnabled(True)
+            return True
+        except:
+            self.ui.lbl_stat_cam.setText("⚠️ Camera Module: Not Found / Error")
+            self.ui.lbl_stat_cam.setStyleSheet("color: #f38ba8; font-weight: bold;")
+            self.ui.btn_scan_start.setEnabled(False)
+            return False
+
+    def _calculate_today_stats(self):
+        users = self.db.load_users()
+        attendance = self.db.get_attendance_for_table()
+        leaves = self.db.get_all_leaves()
+        today_str = datetime.now().strftime("%Y-%m-%d")
+
+        total_users = len(users)
+        present_today = len(attendance)
+        late_count = 0
+        shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
+        grace_period = timedelta(minutes=self.current_settings["grace"])
+
+        for record in attendance:
+            if record["in_time"]:
+                try:
+                    in_time = datetime.strptime(record["in_time"], "%H:%M:%S")
+                    if in_time > (shift_start + grace_period):
+                        late_count += 1
+                except:
+                    pass
+
+        on_leave_today = sum(1 for leave in leaves if leave["date"] == today_str)
+
+        absent_today = max(0, total_users - (present_today + on_leave_today))
+
+        return {
+            "total": total_users,
+            "present": present_today,
+            "late": late_count,
+            "leave": on_leave_today,
+            "absent": absent_today,
+        }
+
+    def _update_summary_cards(self, stats):
+        self.ui.val_total.setText(str(stats["total"]))
+        self.ui.val_present.setText(str(stats["present"]))
+        self.ui.val_late.setText(str(stats["late"]))
+        self.ui.val_leave.setText(str(stats["leave"]))
+
+    def _update_charts(self, stats):
+        days_labels, present_counts, late_counts, absent_counts = [], [], [], []
+        total_users = stats["total"]
+
+        for i in range(4, -1, -1):
+            target_date = datetime.now() - timedelta(days=i)
+            date_str = target_date.strftime("%Y-%m-%d")
+            days_labels.append(target_date.strftime("%a"))
+
+            daily_att = self.db.get_attendance_by_date_range(date_str, date_str)
+            daily_leaves = self.db.get_leaves_by_date_range(date_str, date_str)
+
+            daily_present = len(daily_att)
+            daily_leave = len(daily_leaves)
+            daily_absent = max(0, total_users - (daily_present + daily_leave))
+
+            daily_late = 0
+            for rec in daily_att:
+                late_sec, _ = self.calculate_times_in_seconds(
+                    rec["in_time"], rec["out_time"]
+                )
+                if late_sec > (self.current_settings["grace"] * 60):
+                    daily_late += 1
+
+            present_counts.append(daily_present)
+            late_counts.append(daily_late)
+            absent_counts.append(daily_absent)
+
+        bar_chart_view = self.create_bar_chart(
+            days_labels, present_counts, late_counts, absent_counts
+        )
+        if self.ui.chart_container_bar.layout():
+            QWidget().setLayout(self.ui.chart_container_bar.layout())
+        bar_layout = QVBoxLayout(self.ui.chart_container_bar)
+        bar_layout.setContentsMargins(0, 0, 0, 0)
+        bar_layout.addWidget(bar_chart_view)
+
+        pie_chart_view = self.create_pie_chart(
+            stats["present"], stats["late"], stats["leave"], stats["absent"]
+        )
+        if self.ui.chart_container_pie.layout():
+            QWidget().setLayout(self.ui.chart_container_pie.layout())
+        pie_layout = QVBoxLayout(self.ui.chart_container_pie)
+        pie_layout.setContentsMargins(0, 0, 0, 0)
+        pie_layout.addWidget(pie_chart_view)
 
 
 if __name__ == "__main__":

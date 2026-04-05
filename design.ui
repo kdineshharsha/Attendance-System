@@ -83,14 +83,56 @@
        <property name="leftMargin"><number>15</number></property>
        <property name="topMargin"><number>20</number></property>
        <property name="rightMargin"><number>15</number></property>
-       <item><widget class="QLabel" name="lbl_app_logo"><property name="text"><string>🧿 FaceRec Pro</string></property><property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property></widget></item>
-       <item><widget class="QPushButton" name="btn_nav_dashboard"><property name="text"><string>🏠 Dashboard</string></property></widget></item>
-       <item><widget class="QPushButton" name="btn_nav_scan"><property name="text"><string>👁️ Live Scanner</string></property></widget></item>
-       <item><widget class="QPushButton" name="btn_nav_attendance"><property name="text"><string>📅 Attendance &amp; Leaves</string></property></widget></item>
-       <item><widget class="QPushButton" name="btn_nav_users"><property name="text"><string>👥 Users &amp; Mgt</string></property></widget></item>
-       <item><widget class="QPushButton" name="btn_nav_reports"><property name="text"><string>📊 Reports</string></property></widget></item>
-       <item><widget class="QPushButton" name="btn_nav_settings"><property name="text"><string>⚙️ Settings</string></property></widget></item>
        
+       <item>
+        <widget class="QLabel" name="lbl_app_logo">
+         <property name="text"><string> FaceRec Pro</string></property>
+         <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+        </widget>
+       </item>
+
+       <item>
+        <widget class="QPushButton" name="btn_nav_dashboard">
+         <property name="text"><string> Dashboard</string></property>
+         <property name="icon"><iconset><normaloff>icons/dashboard.svg</normaloff>icons/dashboard.svg</iconset></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_nav_scan">
+         <property name="text"><string> Live Scanner</string></property>
+         <property name="icon"><iconset><normaloff>icons/scan.svg</normaloff>icons/scan.svg</iconset></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_nav_attendance">
+         <property name="text"><string> Attendance &amp; Leaves</string></property>
+         <property name="icon"><iconset><normaloff>icons/calendar.svg</normaloff>icons/calendar.svg</iconset></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_nav_users">
+         <property name="text"><string> Users &amp; Mgt</string></property>
+         <property name="icon"><iconset><normaloff>icons/users.svg</normaloff>icons/users.svg</iconset></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_nav_reports">
+         <property name="text"><string> Reports</string></property>
+         <property name="icon"><iconset><normaloff>icons/report.svg</normaloff>icons/report.svg</iconset></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="btn_nav_settings">
+         <property name="text"><string> Settings</string></property>
+         <property name="icon"><iconset><normaloff>icons/settings.svg</normaloff>icons/settings.svg</iconset></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
        <item><spacer name="verticalSpacer_sidebar"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
       </layout>
      </widget>
@@ -98,7 +140,8 @@
 
     <item>
      <widget class="QStackedWidget" name="stackedWidget">
-      <property name="currentIndex"><number>5</number></property> <widget class="QWidget" name="page_dashboard">
+      <property name="currentIndex"><number>0</number></property> 
+      <widget class="QWidget" name="page_dashboard">
        <layout class="QVBoxLayout" name="verticalLayout_dash">
         <property name="spacing"><number>25</number></property>
         <property name="leftMargin"><number>25</number></property>
@@ -114,7 +157,15 @@
            </layout>
           </item>
           <item><spacer name="horizontalSpacer_header"><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
-          <item><widget class="QLabel" name="lbl_dash_status_badge"><property name="text"><string>🟢 System Online</string></property><property name="styleSheet"><string>background-color: #181825; border: 1px solid #a6e3a1; color: #a6e3a1; padding: 10px 20px; border-radius: 18px; font-weight: bold; font-size: 14px;</string></property></widget></item>
+          <item>
+           <widget class="QLabel" name="lbl_dash_status_badge">
+            <property name="text"><string>🟢 System Online</string></property>
+            <property name="styleSheet"><string>background-color: #181825; border: 1px solid #a6e3a1; color: #a6e3a1; padding: 6px 16px; border-radius: 16px; font-weight: bold; font-size: 13px;</string></property>
+            <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+            <property name="minimumSize"><size><width>0</width><height>34</height></size></property>
+            <property name="maximumSize"><size><width>16777215</width><height>34</height></size></property>
+           </widget>
+          </item>
          </layout>
         </item>
         <item>
@@ -129,9 +180,11 @@
              <item><widget class="QLabel" name="icon_c1"><property name="maximumSize"><size><width>50</width><height>50</height></size></property><property name="pixmap"><pixmap>icons/users.svg</pixmap></property><property name="scaledContents"><bool>true</bool></property><property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property></widget></item>
              <item>
               <layout class="QVBoxLayout">
-               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <property name="spacing"><number>0</number></property>
+               <item><spacer name="vs_c1_t"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
                <item><widget class="QLabel" name="val_total"><property name="text"><string>--</string></property><property name="class"><string>card_value</string></property></widget></item>
                <item><widget class="QLabel" name="lbl_t1"><property name="text"><string>Total Registered</string></property><property name="class"><string>card_title</string></property></widget></item>
+               <item><spacer name="vs_c1_b"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
               </layout>
              </item>
              <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
@@ -147,9 +200,11 @@
              <item><widget class="QLabel" name="icon_c2"><property name="maximumSize"><size><width>50</width><height>50</height></size></property><property name="pixmap"><pixmap>icons/present.svg</pixmap></property><property name="scaledContents"><bool>true</bool></property><property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property></widget></item>
              <item>
               <layout class="QVBoxLayout">
-               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <property name="spacing"><number>0</number></property>
+               <item><spacer name="vs_c2_t"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
                <item><widget class="QLabel" name="val_present"><property name="text"><string>--</string></property><property name="class"><string>card_value</string></property></widget></item>
                <item><widget class="QLabel" name="lbl_t2"><property name="text"><string>Present Today</string></property><property name="class"><string>card_title</string></property></widget></item>
+               <item><spacer name="vs_c2_b"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
               </layout>
              </item>
              <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
@@ -165,9 +220,11 @@
              <item><widget class="QLabel" name="icon_c3"><property name="maximumSize"><size><width>50</width><height>50</height></size></property><property name="pixmap"><pixmap>icons/late.svg</pixmap></property><property name="scaledContents"><bool>true</bool></property><property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property></widget></item>
              <item>
               <layout class="QVBoxLayout">
-               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <property name="spacing"><number>0</number></property>
+               <item><spacer name="vs_c3_t"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
                <item><widget class="QLabel" name="val_late"><property name="text"><string>--</string></property><property name="class"><string>card_value</string></property></widget></item>
                <item><widget class="QLabel" name="lbl_t3"><property name="text"><string>Late Arrivals</string></property><property name="class"><string>card_title</string></property></widget></item>
+               <item><spacer name="vs_c3_b"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
               </layout>
              </item>
              <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
@@ -183,9 +240,11 @@
              <item><widget class="QLabel" name="icon_c4"><property name="maximumSize"><size><width>50</width><height>50</height></size></property><property name="pixmap"><pixmap>icons/leave.svg</pixmap></property><property name="scaledContents"><bool>true</bool></property><property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property></widget></item>
              <item>
               <layout class="QVBoxLayout">
-               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <property name="spacing"><number>0</number></property>
+               <item><spacer name="vs_c4_t"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
                <item><widget class="QLabel" name="val_leave"><property name="text"><string>--</string></property><property name="class"><string>card_value</string></property></widget></item>
                <item><widget class="QLabel" name="lbl_t4"><property name="text"><string>On Leave Today</string></property><property name="class"><string>card_title</string></property></widget></item>
+               <item><spacer name="vs_c4_b"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
               </layout>
              </item>
              <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
@@ -210,25 +269,22 @@
           </layout>
          </widget>
         </item>
-<item>
+        <item>
          <layout class="QHBoxLayout" name="horizontalLayout_charts">
           <property name="spacing"><number>20</number></property>
-          
           <item>
            <widget class="QWidget" name="chart_container_bar" native="true">
             <property name="minimumSize"><size><width>0</width><height>300</height></size></property>
            </widget>
           </item>
-          
           <item>
            <widget class="QWidget" name="chart_container_pie" native="true">
             <property name="minimumSize"><size><width>0</width><height>300</height></size></property>
            </widget>
           </item>
-          
          </layout>
         </item>       
-        </layout>
+       </layout>
       </widget>
 
       <widget class="QWidget" name="page_scan">
