@@ -30,8 +30,8 @@
     QTabWidget#tabWidget_attendance &gt; QTabBar::tab, QTabWidget#tabWidget_users &gt; QTabBar::tab { background: #1e1e2e; border: 1px solid #45475a; color: #bac2de; padding: 8px 20px; margin-right: 12px; border-radius: 15px; font-weight: bold; font-size: 12px; }
     
     /* Unique Colors for Sub-tabs */
-    QTabWidget#tabWidget_attendance &gt; QTabBar::tab:selected { background: #a6e3a1; border: 1px solid #a6e3a1; color: #11111b; } /* Green */
-    QTabWidget#tabWidget_users &gt; QTabBar::tab:selected { background: #cba6f7; border: 1px solid #cba6f7; color: #11111b; } /* Purple */
+    QTabWidget#tabWidget_attendance &gt; QTabBar::tab:selected { background: #a6e3a1; border: 1px solid #a6e3a1; color: #11111b; } 
+    QTabWidget#tabWidget_users &gt; QTabBar::tab:selected { background: #cba6f7; border: 1px solid #cba6f7; color: #11111b; } 
     
     QTabWidget#tabWidget_attendance &gt; QTabBar::tab:hover:!selected, QTabWidget#tabWidget_users &gt; QTabBar::tab:hover:!selected { background: #313244; }
 
@@ -53,12 +53,16 @@
 
     /* Dashboard Cards */
     QWidget#card_1, QWidget#card_2, QWidget#card_3, QWidget#card_4 { background-color: #313244; border-radius: 12px; border: 1px solid #45475a; }
-    QLabel.card_title { font-size: 16px; color: #a6adc8; font-weight: bold; }
-    QLabel.card_value { font-size: 42px; font-weight: bold; }
+    QLabel.card_title { font-size: 14px; color: #a6adc8; font-weight: bold; }
+    QLabel.card_value { font-size: 38px; font-weight: bold; }
     QLabel#val_total { color: #89b4fa; }
     QLabel#val_present { color: #a6e3a1; }
     QLabel#val_late { color: #f38ba8; }
     QLabel#val_leave { color: #f9e2af; }
+    
+    /* Group Boxes (Status Panel) */
+    QGroupBox { border: 1px solid #45475a; border-radius: 8px; margin-top: 15px; font-weight: bold; color: #89b4fa; font-size: 14px; }
+    QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
 
     /* Labels */
     QLabel { font-weight: bold; }
@@ -92,169 +96,274 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>4</number>
+       <number>0</number>
       </property>
+      
       <widget class="QWidget" name="tab_dashboard">
        <attribute name="title">
         <string>🏠 Dashboard</string>
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_dash">
         <property name="spacing">
-         <number>20</number>
+         <number>25</number>
         </property>
         <property name="leftMargin">
-         <number>20</number>
+         <number>25</number>
         </property>
         <property name="topMargin">
          <number>30</number>
         </property>
         <property name="rightMargin">
-         <number>20</number>
+         <number>25</number>
         </property>
         <property name="bottomMargin">
-         <number>20</number>
+         <number>25</number>
         </property>
+        
         <item>
-         <widget class="QLabel" name="lbl_dash_title">
-          <property name="font">
-           <font>
-            <family>Segoe UI</family>
-            <pointsize>-1</pointsize>
-            <bold>true</bold>
-           </font>
-          </property>
-          <property name="text">
-           <string>System Overview (Today)</string>
-          </property>
-         </widget>
+         <layout class="QHBoxLayout" name="horizontalLayout_header">
+          <item>
+           <layout class="QVBoxLayout" name="verticalLayout_header_text">
+            <item>
+             <widget class="QLabel" name="lbl_welcome">
+              <property name="text">
+               <string>👋 Welcome back, Admin!</string>
+              </property>
+              <property name="styleSheet">
+               <string>color: #a6adc8; font-size: 14px;</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLabel" name="lbl_dash_title">
+              <property name="font">
+               <font>
+                <family>Segoe UI</family>
+                <pointsize>20</pointsize>
+                <bold>true</bold>
+               </font>
+              </property>
+              <property name="text">
+               <string>System Overview</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_header">
+            <property name="orientation">
+             <enum>Qt::Orientation::Horizontal</enum>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QLabel" name="lbl_dash_status_badge">
+            <property name="text">
+             <string>🟢 System Online</string>
+            </property>
+            <property name="styleSheet">
+             <string>background-color: #181825; border: 1px solid #a6e3a1; color: #a6e3a1; padding: 10px 20px; border-radius: 18px; font-weight: bold; font-size: 14px;</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
+
         <item>
          <layout class="QGridLayout" name="gridLayout_cards">
           <property name="spacing">
            <number>20</number>
           </property>
+          
           <item row="0" column="0">
-           <layout class="QVBoxLayout">
-            <item>
-             <widget class="QLabel" name="lbl_t1">
-              <property name="text">
-               <string>👥 Total Registered</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_title</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="val_total">
-              <property name="text">
-               <string>--</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_value</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QWidget" name="card_1">
+            <property name="minimumSize">
+             <size><width>0</width><height>120</height></size>
+            </property>
+            <layout class="QHBoxLayout">
+             <property name="spacing"><number>20</number></property>
+             <property name="leftMargin"><number>25</number></property>
+             <item>
+              <widget class="QLabel" name="icon_c1">
+               <property name="text"><string>👥</string></property>
+               <property name="font"><font><pointsize>42</pointsize></font></property>
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QVBoxLayout">
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <item>
+                <widget class="QLabel" name="val_total">
+                 <property name="text"><string>--</string></property>
+                 <property name="class"><string>card_value</string></property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lbl_t1">
+                 <property name="text"><string>Total Registered</string></property>
+                 <property name="class"><string>card_title</string></property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+            </layout>
+           </widget>
           </item>
+
           <item row="0" column="1">
-           <layout class="QVBoxLayout">
-            <item>
-             <widget class="QLabel" name="lbl_t2">
-              <property name="text">
-               <string>✅ Present Today</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_title</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="val_present">
-              <property name="text">
-               <string>--</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_value</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QWidget" name="card_2">
+            <property name="minimumSize">
+             <size><width>0</width><height>120</height></size>
+            </property>
+            <layout class="QHBoxLayout">
+             <property name="spacing"><number>20</number></property>
+             <property name="leftMargin"><number>25</number></property>
+             <item>
+              <widget class="QLabel" name="icon_c2">
+               <property name="text"><string>✅</string></property>
+               <property name="font"><font><pointsize>42</pointsize></font></property>
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QVBoxLayout">
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <item>
+                <widget class="QLabel" name="val_present">
+                 <property name="text"><string>--</string></property>
+                 <property name="class"><string>card_value</string></property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lbl_t2">
+                 <property name="text"><string>Present Today</string></property>
+                 <property name="class"><string>card_title</string></property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+            </layout>
+           </widget>
           </item>
+
           <item row="1" column="0">
-           <layout class="QVBoxLayout">
-            <item>
-             <widget class="QLabel" name="lbl_t3">
-              <property name="text">
-               <string>⚠️ Late Today</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_title</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="val_late">
-              <property name="text">
-               <string>--</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_value</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QWidget" name="card_3">
+            <property name="minimumSize">
+             <size><width>0</width><height>120</height></size>
+            </property>
+            <layout class="QHBoxLayout">
+             <property name="spacing"><number>20</number></property>
+             <property name="leftMargin"><number>25</number></property>
+             <item>
+              <widget class="QLabel" name="icon_c3">
+               <property name="text"><string>⚠️</string></property>
+               <property name="font"><font><pointsize>42</pointsize></font></property>
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QVBoxLayout">
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <item>
+                <widget class="QLabel" name="val_late">
+                 <property name="text"><string>--</string></property>
+                 <property name="class"><string>card_value</string></property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lbl_t3">
+                 <property name="text"><string>Late Arrivals</string></property>
+                 <property name="class"><string>card_title</string></property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+            </layout>
+           </widget>
           </item>
+
           <item row="1" column="1">
-           <layout class="QVBoxLayout">
-            <item>
-             <widget class="QLabel" name="lbl_t4">
-              <property name="text">
-               <string>🎌 On Leave</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_title</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QLabel" name="val_leave">
-              <property name="text">
-               <string>--</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignmentFlag::AlignCenter</set>
-              </property>
-              <property name="class" stdset="0">
-               <string>card_value</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
+           <widget class="QWidget" name="card_4">
+            <property name="minimumSize">
+             <size><width>0</width><height>120</height></size>
+            </property>
+            <layout class="QHBoxLayout">
+             <property name="spacing"><number>20</number></property>
+             <property name="leftMargin"><number>25</number></property>
+             <item>
+              <widget class="QLabel" name="icon_c4">
+               <property name="text"><string>🎌</string></property>
+               <property name="font"><font><pointsize>42</pointsize></font></property>
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignCenter</set></property>
+              </widget>
+             </item>
+             <item>
+              <layout class="QVBoxLayout">
+               <property name="alignment"><set>Qt::AlignmentFlag::AlignVCenter</set></property>
+               <item>
+                <widget class="QLabel" name="val_leave">
+                 <property name="text"><string>--</string></property>
+                 <property name="class"><string>card_value</string></property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLabel" name="lbl_t4">
+                 <property name="text"><string>On Leave Today</string></property>
+                 <property name="class"><string>card_title</string></property>
+                </widget>
+               </item>
+              </layout>
+             </item>
+             <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+            </layout>
+           </widget>
           </item>
          </layout>
         </item>
+        
+        <item>
+         <widget class="QGroupBox" name="groupBox_status">
+          <property name="title">
+           <string>System Diagnostics</string>
+          </property>
+          <layout class="QHBoxLayout" name="horizontalLayout_status">
+           <property name="spacing"><number>30</number></property>
+           <property name="leftMargin"><number>20</number></property>
+           <property name="topMargin"><number>20</number></property>
+           <property name="rightMargin"><number>20</number></property>
+           <property name="bottomMargin"><number>20</number></property>
+           <item>
+            <widget class="QLabel" name="lbl_stat_cam">
+             <property name="text"><string>📷 Camera Module: Ready</string></property>
+             <property name="styleSheet"><string>color: #cdd6f4; font-weight: normal;</string></property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lbl_stat_db">
+             <property name="text"><string>🗄️ Database: Connected</string></property>
+             <property name="styleSheet"><string>color: #cdd6f4; font-weight: normal;</string></property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lbl_stat_ai">
+             <property name="text"><string>🧠 AI Engine: Active (CNN Model)</string></property>
+             <property name="styleSheet"><string>color: #cdd6f4; font-weight: normal;</string></property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer_stat">
+             <property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property>
+            </spacer>
+           </item>
+          </layout>
+         </widget>
+        </item>
+
         <item>
          <spacer name="verticalSpacer_dash">
           <property name="orientation">
@@ -270,6 +379,7 @@
         </item>
        </layout>
       </widget>
+
       <widget class="QWidget" name="tab_scan">
        <attribute name="title">
         <string>👁️ Live Scanner</string>
@@ -404,6 +514,7 @@
         </item>
        </layout>
       </widget>
+
       <widget class="QWidget" name="tab_attendance_main">
        <attribute name="title">
         <string>📅 Attendance &amp; Leaves</string>
@@ -576,6 +687,9 @@
               </item>
               <item>
                <widget class="QDateEdit" name="dateEdit_leave">
+                <property name="displayFormat">
+                 <string>dd-MM-yyyy</string>
+                </property>
                 <property name="calendarPopup">
                  <bool>true</bool>
                 </property>
@@ -741,6 +855,7 @@
         </item>
        </layout>
       </widget>
+
       <widget class="QWidget" name="tab_users_main">
        <attribute name="title">
         <string>👥 Users &amp; Mgt</string>
@@ -1023,6 +1138,7 @@
         </item>
        </layout>
       </widget>
+
       <widget class="QWidget" name="tab_reports">
        <attribute name="title">
         <string>📊 Reports</string>
@@ -1072,7 +1188,7 @@
           <item>
            <widget class="QDateEdit" name="dateEdit_from">
             <property name="displayFormat">
-             <string>d/M/yyyy</string>
+             <string>dd-MM-yyyy</string>
             </property>
             <property name="calendarPopup">
              <bool>true</bool>
@@ -1089,7 +1205,7 @@
           <item>
            <widget class="QDateEdit" name="dateEdit_to">
             <property name="displayFormat">
-             <string>d/M/yyyy</string>
+             <string>dd-MM-yyyy</string>
             </property>
             <property name="calendarPopup">
              <bool>true</bool>

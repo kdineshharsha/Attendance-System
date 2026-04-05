@@ -1,5 +1,5 @@
 from calendar import c
-import dis
+import pandas as pd
 from math import e
 from operator import le
 import os
@@ -65,6 +65,8 @@ def ai_scan_worker(input_queue, output_queue, users_data):
                     output_queue.put(("Match", best_match))
                 else:
                     output_queue.put(("No_Match", None))
+            else:
+                output_queue.put(("No_Match", None))
 
         except ValueError:
             pass
@@ -83,6 +85,7 @@ class RegistrationThread(QThread):
         self.name = name
         self.age = age
         self.details = details
+
         self.db = DBManager()
 
     def run(self):
@@ -181,6 +184,7 @@ class AttendanceSystem:
         self.ui.btn_refresh_att.clicked.connect(self.load_all_attendance)
         self.ui.btn_leave_delete.clicked.connect(self.handle_delete_leave)
         self.ui.btn_generate_report.clicked.connect(self.handle_generate_report)
+        self.ui.btn_export_xl.clicked.connect(self.export_to_excel)
         current_date = QDate.currentDate()
         self.ui.dateEdit_from.setDate(
             QDate(current_date.year(), current_date.month(), 1)
@@ -192,6 +196,8 @@ class AttendanceSystem:
         self.load_all_leaves()
         self.ui.dateEdit_leave.setDate(QDate.currentDate())
         self.load_users_to_leave_dropdown()
+        self.last_matched_id = None
+        self.no_match_frames = 0
 
     def upload_photo(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -848,6 +854,57 @@ class AttendanceSystem:
                 self.ui, "No Data", "No data available to generate master report."
             )
 
+    def export_to_excel(self):
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self.ui,
+            "Save Report As",
+            "Attendance_Report.xlsx",  # Default නම
+            "Excel Files (*.xlsx);;All Files (*)",
+        )
+
+        if not file_path:
+            return
+
+        self.ui.btn_export_xl.setText("⏳ Exporting...")
+        self.ui.btn_export_xl.setEnabled(False)
+
+        try:
+            column_count = self.ui.table_report_preview.columnCount()
+            headers = []
+            for col in range(column_count):
+                header_item = self.ui.table_report_preview.horizontalHeaderItem(col)
+                headers.append(header_item.text() if header_item else f"Column {col}")
+
+            row_count = self.ui.table_report_preview.rowCount()
+            table_data = []
+
+            for row in range(row_count):
+                row_data = []
+                for col in range(column_count):
+                    item = self.ui.table_report_preview.item(row, col)
+                    row_data.append(item.text() if item else "")
+                table_data.append(row_data)
+
+            df = pd.DataFrame(table_data, columns=headers)
+
+            df.to_excel(file_path, index=False, engine="openpyxl")
+
+            QMessageBox.information(
+                self.ui,
+                "Export Successful",
+                f"Report successfully saved to:\n{file_path}",
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self.ui, "Export Error", f"An error occurred while exporting:\n{str(e)}"
+            )
+
+        finally:
+            self.ui.btn_export_xl.setText("📥 Export to Excel")
+            self.ui.btn_export_xl.setEnabled(True)
+
     def start_camera(self):
         users_data = self.db.load_users()
         if not users_data:
@@ -884,6 +941,14 @@ class AttendanceSystem:
         self.ui.lbl_live_camera.setPixmap(scaled)
 
     def show_match_results(self, user_data, qt_img):
+        # current_id = user_data["id"]
+
+        # if current_id == self.last_matched_id:
+        #     self.no_match_frames = 0
+        #     return
+
+        # self.last_matched_id = current_id
+        # self.no_match_frames = 0
         attendance_status = self.db.mark_attendance(user_data["id"])
         print(
             f"Attendance status for {user_data['name']} (ID: {user_data['id']}): {attendance_status}"
@@ -932,11 +997,14 @@ class AttendanceSystem:
         self.load_all_attendance()
 
     def show_no_match(self):
+
+        self.last_matched_id = None
         self.ui.lbl_status.setText("Status: ❌ Unknown Face")
         self.ui.lbl_res_name.setText("Name: Unknown")
         self.ui.lbl_res_id.setText("Student ID: --")
         self.ui.lbl_res_age.setText("Age: --")
         self.ui.txt_res_details.setText("--")
+        self.ui.lbl_res_image.clear()
 
     def show_cam_error(self, err_msg):
         QMessageBox.critical(self.ui, "Camera Error", err_msg)
