@@ -26,6 +26,7 @@ class DBManager:
                 id TEXT PRIMARY KEY ,
                 name TEXT NOT NULL,
                 age INTEGER,
+                email TEXT,
                 details TEXT,
                 embedding TEXT NOT NULL
             )
@@ -79,7 +80,7 @@ class DBManager:
 
         conn.commit()
 
-    def add_user(self, id, name, age, details, embedding):
+    def add_user(self, id, name, age, email, details, embedding):
         conn = self.get_connection()
         cursor = conn.cursor()
         embedding_list = embedding.tolist()
@@ -87,10 +88,10 @@ class DBManager:
 
         cursor.execute(
             """
-            INSERT INTO users (id, name, age, details, embedding)
-            VALUES (?,?, ?, ?, ?)
+            INSERT INTO users (id, name, age,email,details, embedding)
+            VALUES (?,?, ?, ?, ?,?)
         """,
-            (id, name, age, details, embedding_json),
+            (id, name, age, email, details, embedding_json),
         )
 
         conn.commit()
@@ -115,6 +116,24 @@ class DBManager:
             }
             users_data.append(user)
         return users_data
+
+    def update_user(self, user_id, name, age, email, details):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                UPDATE users
+                SET name = ?, age = ?, email = ?, details = ?
+                WHERE id = ?
+            """,
+                (name, age, email, details, user_id),
+            )
+            conn.commit()
+            return True
+        except Exception as e:
+            print(f"Error updating user: {e}")
+            return False
 
     def add_leave(self, user_id, date, leave_type, reason):
         conn = self.get_connection()
@@ -248,7 +267,7 @@ class DBManager:
 
         cursor.execute(
             """
-            SELECT u.id, u.name, u.age, u.details, a.in_time, a.out_time
+            SELECT u.id, u.name, u.age,u.email, u.details, a.in_time, a.out_time
             FROM users u
             LEFT JOIN attendance a ON u.id = a.user_id AND a.date = ?
         """,
@@ -262,8 +281,9 @@ class DBManager:
                 "id": row[0],
                 "name": row[1],
                 "age": row[2],
-                "details": row[3],
-                "early_leave": bool(row[4]),
+                "email": row[3],
+                "details": row[4],
+                "early_leave": bool(row[5]),
             }
             users_data.append(user)
         return users_data

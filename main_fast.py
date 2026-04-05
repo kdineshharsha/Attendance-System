@@ -1,4 +1,5 @@
 from calendar import c
+import email
 import pandas as pd
 from math import e
 from operator import le
@@ -84,12 +85,13 @@ class RegistrationThread(QThread):
     success_signal = Signal(str)
     error_signal = Signal(str)
 
-    def __init__(self, reg_img_path, id, name, age, details):
+    def __init__(self, reg_img_path, id, name, age, email, details):
         super().__init__()
         self.reg_img_path = reg_img_path
         self.id = id
         self.name = name
         self.age = age
+        self.email = email
         self.details = details
 
         self.db = DBManager()
@@ -100,7 +102,9 @@ class RegistrationThread(QThread):
             embedding = face_recognition.face_encodings(target_image, model="cnn")[0]
 
             face_embedding = embedding
-            self.db.add_user(self.id, self.name, self.age, self.details, face_embedding)
+            self.db.add_user(
+                self.id, self.name, self.age, self.email, self.details, face_embedding
+            )
             self.success_signal.emit(self.name)
         except ValueError:
             self.error_signal.emit("Face Not Detected")
@@ -264,14 +268,23 @@ class AttendanceSystem:
         name = self.ui.txt_reg_name.text().strip()
         age = self.ui.spin_reg_age.value()
         details = self.ui.txt_reg_details.toPlainText().strip()
+        email = self.ui.txt_reg_email.text().strip()
         if not id or not name:
             QMessageBox.warning(
                 self.ui, "Input Error", "ID and Name are required fields."
             )
             return
+        if self.ui.btn_reg_save.text() == "🔄️ Update User":
+            self.db.update_user(id, name, age, email, details)
+            QMessageBox.warning(self.ui, "Success", "User updated successfully.")
+            self.load_all_users()
+            return
         self.ui.btn_reg_save.setEnabled(False)
         self.ui.btn_reg_save.setText("Saving...")
-        self.reg_thread = RegistrationThread(self.reg_img_path, id, name, age, details)
+
+        self.reg_thread = RegistrationThread(
+            self.reg_img_path, id, name, age, email, details
+        )
         self.reg_thread.success_signal.connect(self.on_reg_success)
         self.reg_thread.error_signal.connect(self.on_reg_error)
         self.reg_thread.start()
@@ -364,22 +377,34 @@ class AttendanceSystem:
     def load_all_users(self):
         users_data = self.db.get_users_for_table()
         # print(users_data)
-
+        self.ui.table_users.setColumnCount(5)
+        self.ui.table_users.setHorizontalHeaderLabels(
+            [
+                "ID",
+                "Name",
+                "Age",
+                "Email",
+                "Details",
+            ]
+        )
         self.ui.table_users.setRowCount(len(users_data))
         self.ui.table_users.setColumnWidth(0, 150)
+        self.ui.table_users.setColumnWidth(1, 150)
+        self.ui.table_users.setColumnWidth(3, 200)
 
         for row_idx, user in enumerate(users_data):
 
             self.ui.table_users.setItem(row_idx, 0, QTableWidgetItem(user["id"]))
             self.ui.table_users.setItem(row_idx, 1, QTableWidgetItem(user["name"]))
             self.ui.table_users.setItem(row_idx, 2, QTableWidgetItem(str(user["age"])))
-            self.ui.table_users.setItem(row_idx, 3, QTableWidgetItem(user["details"]))
-            leave_status = user["early_leave"]
+            self.ui.table_users.setItem(row_idx, 3, QTableWidgetItem(user["email"]))
+            self.ui.table_users.setItem(row_idx, 4, QTableWidgetItem(user["details"]))
+            # leave_status = user["early_leave"]
 
-            if leave_status == True:
-                self.ui.table_users.setItem(row_idx, 4, QTableWidgetItem("✅ Granted"))
-            else:
-                self.ui.table_users.setItem(row_idx, 4, QTableWidgetItem("❌ None"))
+            # if leave_status == True:
+            #     self.ui.table_users.setItem(row_idx, 5, QTableWidgetItem("✅ Granted"))
+            # else:
+            #     self.ui.table_users.setItem(row_idx, 5, QTableWidgetItem("❌ None"))
 
         # print(f"Loaded {len(users_data)} users from database.")
 
@@ -393,12 +418,13 @@ class AttendanceSystem:
         user_id = self.ui.table_users.item(row, 0).text()
         user_name = self.ui.table_users.item(row, 1).text()
         user_age = self.ui.table_users.item(row, 2).text()
-        user_details = self.ui.table_users.item(row, 3).text()
-        user_details = self.ui.table_users.item(row, 3).text()
+        user_email = self.ui.table_users.item(row, 3).text()
+        user_details = self.ui.table_users.item(row, 4).text()
 
         self.ui.txt_reg_id.setText(user_id)
         self.ui.txt_reg_name.setText(user_name)
         self.ui.spin_reg_age.setValue(int(user_age))
+        self.ui.txt_reg_email.setText(user_email)
         self.ui.txt_reg_details.setText(user_details)
 
         self.ui.txt_reg_id.setReadOnly(True)
@@ -406,8 +432,7 @@ class AttendanceSystem:
 
         self.ui.btn_reg_save.setText("🔄️ Update User")
 
-        self.ui.tabWidget.setCurrentIndex(0)
-        self.db.grant_early_leave(user_id)
+        self.ui.tabWidget_users.setCurrentIndex(1)
         self.load_all_users()
 
     def handle_add_leave(self):
