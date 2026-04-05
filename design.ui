@@ -210,8 +210,25 @@
           </layout>
          </widget>
         </item>
-        <item><spacer name="verticalSpacer_dash"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
-       </layout>
+<item>
+         <layout class="QHBoxLayout" name="horizontalLayout_charts">
+          <property name="spacing"><number>20</number></property>
+          
+          <item>
+           <widget class="QWidget" name="chart_container_bar" native="true">
+            <property name="minimumSize"><size><width>0</width><height>300</height></size></property>
+           </widget>
+          </item>
+          
+          <item>
+           <widget class="QWidget" name="chart_container_pie" native="true">
+            <property name="minimumSize"><size><width>0</width><height>300</height></size></property>
+           </widget>
+          </item>
+          
+         </layout>
+        </item>       
+        </layout>
       </widget>
 
       <widget class="QWidget" name="page_scan">

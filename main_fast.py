@@ -15,19 +15,25 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QTableWidgetItem,
     QCompleter,
+    QVBoxLayout,
+    QWidget,
 )
-
+from PySide6.QtCharts import (
+    QChart,
+    QChartView,
+    QBarSet,
+    QBarSeries,
+    QBarCategoryAxis,
+    QValueAxis,
+    QPieSeries,
+)
 from scipy.datasets import face
 from sympy import Q, use
 from db_manager import DBManager
-from PySide6.QtGui import QPixmap, QImage, QColor, QFont
+from PySide6.QtGui import QPixmap, QImage, QColor, QFont, QPainter
 import cv2
 import numpy as np
 from datetime import datetime, timedelta
-
-# os.environ["OMP_NUM_THREADS"] = "8"
-# os.environ["TF_NUM_INTRAOP_THREADS"] = "8"
-# os.environ["TF_NUM_INTEROP_THREADS"] = "8"
 
 
 def ai_scan_worker(input_queue, output_queue, users_data):
@@ -280,8 +286,8 @@ class AttendanceSystem:
         present_today = len(attendance)
 
         late_count = 0
-        shift_start = datetime.strptime("08:00:00", "%H:%M:%S")
-        grace_period = timedelta(minutes=5)
+        shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
+        grace_period = timedelta(minutes=self.current_settings["grace"])
 
         for record in attendance:
             if record["in_time"]:
@@ -293,11 +299,147 @@ class AttendanceSystem:
                     pass
 
         on_leave_today = sum(1 for leave in leaves if leave["date"] == today_str)
+        absent_today = total_users - (present_today + on_leave_today)
+        if absent_today < 0:
+            absent_today = 0
 
         self.ui.val_total.setText(str(total_users))
         self.ui.val_present.setText(str(present_today))
         self.ui.val_late.setText(str(late_count))
         self.ui.val_leave.setText(str(on_leave_today))
+
+        days_labels = []
+        present_counts = []
+        late_counts = []
+        absent_counts = []
+
+        for i in range(4, -1, -1):
+            target_date = datetime.now() - timedelta(days=i)
+            date_str = target_date.strftime("%Y-%m-%d")
+            day_name = target_date.strftime("%a")
+            days_labels.append(day_name)
+
+            daily_att = self.db.get_attendance_by_date_range(date_str, date_str)
+            daily_leaves = self.db.get_leaves_by_date_range(date_str, date_str)
+
+            daily_present = len(daily_att)
+            daily_leave = len(daily_leaves)
+            daily_absent = total_users - (daily_present + daily_leave)
+            if daily_absent < 0:
+                daily_absent = 0
+
+            daily_late = 0
+            for rec in daily_att:
+                late_sec, ot_sec = self.calculate_times_in_seconds(
+                    rec["in_time"], rec["out_time"]
+                )
+                if late_sec > (self.current_settings["grace"] * 60):
+                    daily_late += 1
+
+            present_counts.append(daily_present)
+            late_counts.append(daily_late)
+            absent_counts.append(daily_absent)
+
+            bar_chart_view = self.create_bar_chart(
+                days_labels, present_counts, late_counts, absent_counts
+            )
+
+        if self.ui.chart_container_bar.layout():
+            QWidget().setLayout(self.ui.chart_container_bar.layout())
+
+        bar_layout = QVBoxLayout(self.ui.chart_container_bar)
+        bar_layout.setContentsMargins(0, 0, 0, 0)
+        bar_layout.addWidget(bar_chart_view)
+
+        pie_chart_view = self.create_pie_chart(
+            present_today, late_count, on_leave_today, absent_today
+        )
+
+        if self.ui.chart_container_pie.layout():
+            QWidget().setLayout(self.ui.chart_container_pie.layout())
+
+        pie_layout = QVBoxLayout(self.ui.chart_container_pie)
+        pie_layout.setContentsMargins(0, 0, 0, 0)
+        pie_layout.addWidget(pie_chart_view)
+
+    def create_bar_chart(self, days, present_list, late_list, absent_list):
+        set_present = QBarSet("Present")
+        set_late = QBarSet("Late")
+        set_absent = QBarSet("Absent")
+
+        set_present.append(present_list)
+        set_late.append(late_list)
+        set_absent.append(absent_list)
+
+        set_present.setColor(QColor("#a6e3a1"))
+        set_late.setColor(QColor("#797bff"))
+        set_absent.setColor(QColor("#f38ba8"))
+
+        series = QBarSeries()
+        series.append(set_present)
+        series.append(set_late)
+        series.append(set_absent)
+
+        chart = QChart()
+        chart.addSeries(series)
+        chart.setTitle("Last 5 Days Attendance")
+        chart.setAnimationOptions(QChart.SeriesAnimations)
+        chart.setBackgroundBrush(QColor("#313244"))
+        chart.setTitleBrush(QColor("#cdd6f4"))
+        chart.legend().setLabelColor(QColor("#cdd6f4"))
+
+        axis_x = QBarCategoryAxis()
+        axis_x.append(days)
+        axis_x.setLabelsColor(QColor("#cdd6f4"))
+        chart.addAxis(axis_x, Qt.AlignBottom)
+        series.attachAxis(axis_x)
+
+        max_users = len(self.db.load_users())
+        if max_users == 0:
+            max_users = 10
+
+        axis_y = QValueAxis()
+        axis_y.setRange(0, max_users)
+        axis_y.setLabelsColor(QColor("#cdd6f4"))
+        chart.addAxis(axis_y, Qt.AlignLeft)
+        series.attachAxis(axis_y)
+
+        chart_view = QChartView(chart)
+        chart_view.setRenderHint(QPainter.Antialiasing)
+        chart_view.setStyleSheet("background: transparent;")
+        return chart_view
+
+    def create_pie_chart(self, present, late, leave, absent):
+        series = QPieSeries()
+
+        slice_present = series.append(f"Present ({present})", present)
+        slice_late = series.append(f"Late ({late})", late)
+        slice_leave = series.append(f"On Leave ({leave})", leave)
+        slice_absent = series.append(f"Absent ({absent})", absent)
+
+        slice_present.setBrush(QColor("#a6e3a1"))
+        slice_late.setBrush(QColor("#797bff"))
+        slice_leave.setBrush(QColor("#89b4fa"))
+        slice_absent.setBrush(QColor("#f38ba8"))
+
+        if present > 0:
+            slice_present.setExploded(True)
+            slice_present.setLabelVisible(True)
+            slice_present.setLabelColor(QColor("#cdd6f4"))
+
+        chart = QChart()
+        chart.addSeries(series)
+        chart.setTitle("Today's Status Breakdown")
+        chart.setAnimationOptions(QChart.SeriesAnimations)
+        chart.setBackgroundBrush(QColor("#313244"))
+        chart.setTitleBrush(QColor("#cdd6f4"))
+        chart.legend().setLabelColor(QColor("#cdd6f4"))
+        chart.legend().setAlignment(Qt.AlignBottom)
+
+        chart_view = QChartView(chart)
+        chart_view.setRenderHint(QPainter.Antialiasing)
+        chart_view.setStyleSheet("background: transparent;")
+        return chart_view
 
     def load_all_users(self):
         users_data = self.db.get_users_for_table()
@@ -490,7 +632,7 @@ class AttendanceSystem:
     def calculate_times_in_seconds(self, in_time_str, out_time_str):
         shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
         shift_end = datetime.strptime(self.current_settings["end"], "%H:%M:%S")
-        grace_period = timedelta(minutes=self.cuurrent_settings["grace"])
+        grace_period = timedelta(minutes=self.current_settings["grace"])
         min_ot = timedelta(minutes=self.current_settings["min_ot"])
 
         late_seconds = 0
