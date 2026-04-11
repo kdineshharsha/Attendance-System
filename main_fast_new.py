@@ -4,7 +4,7 @@ import face_recognition
 import multiprocessing as mp
 import sys
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtCore import QFile, Qt, QThread, Signal, QDate, QTime
+from PySide6.QtCore import QFile, Qt, QThread, Signal, QDate, QTime, QTimer
 from PySide6.QtWidgets import (
     QApplication,
     QMessageBox,
@@ -28,11 +28,13 @@ from db_manager import DBManager
 from PySide6.QtGui import QPixmap, QImage, QColor, QFont, QPainter
 import cv2
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from API_manager import APIManager
+from cache_manager import CacheManager
 
 
 def ai_scan_worker(input_queue, output_queue, users_data):
@@ -58,6 +60,8 @@ def ai_scan_worker(input_queue, output_queue, users_data):
                 best_distance = 1.0
 
                 for user in users_data:
+                    if len(user["embedding"]) == 0:
+                        continue
                     dist = face_recognition.face_distance(
                         [user["embedding"]], current_embedding
                     )
@@ -83,16 +87,18 @@ class RegistrationThread(QThread):
     success_signal = Signal(str)
     error_signal = Signal(str)
 
-    def __init__(self, reg_img_path, id, name, age, email, details):
+    def __init__(self, reg_img_path, id, name, email, designation, basic_salary):
         super().__init__()
         self.reg_img_path = reg_img_path
-        self.id = id
+        self.emp_id = id
         self.name = name
-        self.age = age
+        self.basic_salary = basic_salary
         self.email = email
-        self.details = details
+        self.designation = designation
 
-        self.db = DBManager()
+        # self.db = DBManager()
+        self.api = APIManager()
+        self.cache_db = CacheManager()
 
     def run(self):
         try:
@@ -100,9 +106,15 @@ class RegistrationThread(QThread):
             embedding = face_recognition.face_encodings(target_image, model="cnn")[0]
 
             face_embedding = embedding
-            self.db.add_user(
-                self.id, self.name, self.age, self.email, self.details, face_embedding
+            self.api.add_user(
+                self.emp_id,
+                self.name,
+                self.email,
+                self.designation,
+                self.basic_salary,
+                face_embedding,
             )
+
             self.success_signal.emit(self.name)
         except ValueError:
             self.error_signal.emit("Face Not Detected")
@@ -118,6 +130,7 @@ class LiveScannerThread(QThread):
 
     def __init__(self, users_data):
         super().__init__()
+
         self.users_data = users_data
         self.running = True
         self.is_processing = False
@@ -228,6 +241,14 @@ class AttendanceSystem:
         ui_file.close()
         self.reg_img_path = ""
         self.db = DBManager()
+        self.api = APIManager()
+        self.cache_db = CacheManager()
+        self.cache_db.sync_users_to_local_db()
+
+        self.cooldown_dict = {}
+        self.cooldown_time = 60
+        self.sync_timer = QTimer()
+
         load_dotenv()
         self.ui.btn_reg_upload.clicked.connect(self.upload_photo)
         self.ui.btn_reg_capture.clicked.connect(self.capture_photo)
@@ -267,6 +288,8 @@ class AttendanceSystem:
         self.load_users_to_leave_dropdown()
         self.last_matched_id = None
         self.no_match_frames = 0
+        self.sync_timer.timeout.connect(self.sync_attendance_to_cloud)
+        self.sync_timer.start(10000)
 
     def switch_page(self, index):
 
@@ -309,26 +332,32 @@ class AttendanceSystem:
         print("Capture Photo button clicked")
 
     def save_database(self):
-        id = self.ui.txt_reg_id.text().strip()
+        emp_id = self.ui.txt_reg_id.text().strip()
         name = self.ui.txt_reg_name.text().strip()
-        age = self.ui.spin_reg_age.value()
-        details = self.ui.txt_reg_details.toPlainText().strip()
+        designation = self.ui.txt_reg_designation.text().strip()
+        basic_salary = self.ui.txt_reg_salary.text().strip()
         email = self.ui.txt_reg_email.text().strip()
-        if not id or not name:
+        if not emp_id or not name:
             QMessageBox.warning(
                 self.ui, "Input Error", "ID and Name are required fields."
             )
             return
         if self.ui.btn_reg_save.text() == "🔄️ Update User":
-            self.db.update_user(id, name, age, email, details)
-            QMessageBox.warning(self.ui, "Success", "User updated successfully.")
+            self.api.update_user(emp_id, name, email, designation, basic_salary)
+            self.on_update_user_success(name)
             self.load_all_users()
+
             return
         self.ui.btn_reg_save.setEnabled(False)
         self.ui.btn_reg_save.setText("Saving...")
 
         self.reg_thread = RegistrationThread(
-            self.reg_img_path, id, name, age, email, details
+            self.reg_img_path,
+            id,
+            name,
+            email,
+            designation,
+            basic_salary,
         )
         self.reg_thread.success_signal.connect(self.on_reg_success)
         self.reg_thread.error_signal.connect(self.on_reg_error)
@@ -420,38 +449,35 @@ class AttendanceSystem:
         return chart_view
 
     def load_all_users(self):
-        users_data = self.db.get_users_for_table()
-        # print(users_data)
+
+        users_data = self.api.get_users_for_table().get("data", [])
         self.ui.table_users.setColumnCount(5)
         self.ui.table_users.setHorizontalHeaderLabels(
             [
                 "ID",
                 "Name",
-                "Age",
                 "Email",
-                "Details",
+                "Designation",
+                "basic_salary",
             ]
         )
         self.ui.table_users.setRowCount(len(users_data))
-        self.ui.table_users.setColumnWidth(0, 150)
+        self.ui.table_users.setColumnWidth(0, 100)
         self.ui.table_users.setColumnWidth(1, 150)
+        self.ui.table_users.setColumnWidth(2, 200)
         self.ui.table_users.setColumnWidth(3, 200)
 
         for row_idx, user in enumerate(users_data):
 
-            self.ui.table_users.setItem(row_idx, 0, QTableWidgetItem(user["id"]))
+            self.ui.table_users.setItem(row_idx, 0, QTableWidgetItem(user["emp_id"]))
             self.ui.table_users.setItem(row_idx, 1, QTableWidgetItem(user["name"]))
-            self.ui.table_users.setItem(row_idx, 2, QTableWidgetItem(str(user["age"])))
-            self.ui.table_users.setItem(row_idx, 3, QTableWidgetItem(user["email"]))
-            self.ui.table_users.setItem(row_idx, 4, QTableWidgetItem(user["details"]))
-            # leave_status = user["early_leave"]
-
-            # if leave_status == True:
-            #     self.ui.table_users.setItem(row_idx, 5, QTableWidgetItem("✅ Granted"))
-            # else:
-            #     self.ui.table_users.setItem(row_idx, 5, QTableWidgetItem("❌ None"))
-
-        # print(f"Loaded {len(users_data)} users from database.")
+            self.ui.table_users.setItem(row_idx, 2, QTableWidgetItem(user["email"]))
+            self.ui.table_users.setItem(
+                row_idx, 3, QTableWidgetItem(user["designation"])
+            )
+            self.ui.table_users.setItem(
+                row_idx, 4, QTableWidgetItem(str(user["basic_salary"]))
+            )
 
     def handle_edit_user(self):
         row = self.ui.table_users.currentRow()
@@ -462,15 +488,15 @@ class AttendanceSystem:
             return
         user_id = self.ui.table_users.item(row, 0).text()
         user_name = self.ui.table_users.item(row, 1).text()
-        user_age = self.ui.table_users.item(row, 2).text()
+        user_designation = self.ui.table_users.item(row, 2).text()
         user_email = self.ui.table_users.item(row, 3).text()
-        user_details = self.ui.table_users.item(row, 4).text()
+        user_basic_salary = self.ui.table_users.item(row, 4).text()
 
         self.ui.txt_reg_id.setText(user_id)
         self.ui.txt_reg_name.setText(user_name)
-        self.ui.spin_reg_age.setValue(int(user_age))
+        self.ui.txt_reg_designation.setText(user_designation)
         self.ui.txt_reg_email.setText(user_email)
-        self.ui.txt_reg_details.setText(user_details)
+        self.ui.txt_reg_salary.setText(user_basic_salary)
 
         self.ui.txt_reg_id.setReadOnly(True)
         self.ui.txt_reg_id.setStyleSheet("background-color: #181825; color: #a6adc8;")
@@ -541,7 +567,9 @@ class AttendanceSystem:
             self.load_all_leaves()
 
     def load_all_attendance(self):
-        attendance_data = self.db.get_attendance_for_table()
+        # attendance_data = self.db.get_attendance_for_table()
+        attendance_response = self.api.get_daily_attendance()
+        attendance_data = attendance_response.get("data", [])
         self.ui.table_attendance.setRowCount(len(attendance_data))
         self.ui.table_attendance.setColumnWidth(0, 150)
         self.ui.table_attendance.setColumnWidth(1, 150)
@@ -550,7 +578,6 @@ class AttendanceSystem:
 
             in_time_str = attendance_record["in_time"]
             out_time_str = attendance_record["out_time"]
-            late_time, ot_time = self.calculate_times(in_time_str, out_time_str)
 
             # print(attendance_record)
             self.ui.table_attendance.setItem(
@@ -1122,7 +1149,9 @@ class AttendanceSystem:
         self.update_dashboard()
 
     def start_camera(self):
-        users_data = self.db.load_users()
+        users_data = self.cache_db.load_users()
+        # print(users_data)
+        # users_data = self.api.get_users_for_table()
         if not users_data:
             QMessageBox.warning(self.ui, "No Data", "Database is empty.")
             return
@@ -1157,17 +1186,26 @@ class AttendanceSystem:
         self.ui.lbl_live_camera.setPixmap(scaled)
 
     def show_match_results(self, user_data, qt_img):
-        # current_id = user_data["id"]
+        current_id = user_data["emp_id"]
+        current_time = datetime.now()
 
-        # if current_id == self.last_matched_id:
-        #     self.no_match_frames = 0
-        #     return
+        if hasattr(self, "cooldown_dict") and current_id in self.cooldown_dict:
+            last_scan_time = self.cooldown_dict[current_id]
+            time_passed = (current_time - last_scan_time).total_seconds()
+            if time_passed < self.cooldown_time:
+                print(
+                    f"Cooldown active for {user_data['name']} (ID: {current_id}). Time passed: {time_passed:.2f} seconds."
+                )
+                return
+        self.cooldown_dict[current_id] = current_time
 
-        # self.last_matched_id = current_id
-        # self.no_match_frames = 0
-        attendance_status = self.db.mark_attendance(user_data["id"])
+        now_utc = datetime.now(timezone.utc)
+        timestamp = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        attendance_status = self.cache_db.mark_attendance(
+            user_data["emp_id"], timestamp
+        )
         print(
-            f"Attendance status for {user_data['name']} (ID: {user_data['id']}): {attendance_status}"
+            f"Attendance status for {user_data['name']} (ID: {user_data['emp_id']}): {attendance_status}"
         )
         if attendance_status == "IN":
             msg = f"✅ IN: Welcome {user_data['name']}!"
@@ -1206,12 +1244,12 @@ class AttendanceSystem:
             msg = f"✅ Identified {user_data['name']}"
             self.ui.lbl_status.setStyleSheet("color: white;")
             self.ui.lbl_status.setText(msg)
-        print(f"Match found: {user_data['name']} (ID: {user_data['id']})")
+        print(f"Match found: {user_data['name']} (ID: {user_data['emp_id']})")
         # self.ui.lbl_status.setText(f"Status: ✅ Identified {user_data['name']}")
         self.ui.lbl_res_name.setText(f"Name: {user_data['name']}")
-        self.ui.lbl_res_id.setText(f"Student ID: {user_data['id']}")
-        self.ui.lbl_res_age.setText(f"Age: {user_data['age']}")
-        self.ui.txt_res_details.setText(user_data["details"])
+        self.ui.lbl_res_id.setText(f"Employee ID: {user_data['emp_id']}")
+        self.ui.lbl_res_age.setText(f"Designation: {user_data['designation']}")
+        # self.ui.txt_res_details.setText(user_data["designation"] or "--")
         pixmap = QPixmap.fromImage(qt_img)
         scaled = pixmap.scaled(
             self.ui.lbl_res_image.width(),
@@ -1241,8 +1279,24 @@ class AttendanceSystem:
         )
         self.ui.txt_reg_id.clear()
         self.ui.txt_reg_name.clear()
-        self.ui.spin_reg_age.setValue(25)
-        self.ui.txt_reg_details.clear()
+        self.ui.txt_reg_designation.clear()
+        self.ui.txt_reg_salary.clear()
+        self.ui.txt_reg_email.clear()
+        self.ui.lbl_reg_preview.clear()
+        self.ui.btn_reg_save.setEnabled(True)
+        self.ui.btn_reg_save.setText("💾 Save to Database")
+        self.reg_img_path = ""
+        self.load_all_users()
+
+    def on_update_user_success(self, name):
+        QMessageBox.information(
+            self.ui, "Success", f"{name}'s information has been updated."
+        )
+        self.ui.txt_reg_id.clear()
+        self.ui.txt_reg_name.clear()
+        self.ui.txt_reg_designation.clear()
+        self.ui.txt_reg_salary.clear()
+        self.ui.txt_reg_email.clear()
         self.ui.btn_reg_save.setEnabled(True)
         self.ui.btn_reg_save.setText("💾 Save to Database")
         self.reg_img_path = ""
@@ -1281,36 +1335,14 @@ class AttendanceSystem:
             return False
 
     def _calculate_today_stats(self):
-        users = self.db.load_users()
-        attendance = self.db.get_attendance_for_table()
-        leaves = self.db.get_all_leaves()
-        today_str = datetime.now().strftime("%Y-%m-%d")
-
-        total_users = len(users)
-        present_today = len(attendance)
-        late_count = 0
-        shift_start = datetime.strptime(self.current_settings["start"], "%H:%M:%S")
-        grace_period = timedelta(minutes=self.current_settings["grace"])
-
-        for record in attendance:
-            if record["in_time"]:
-                try:
-                    in_time = datetime.strptime(record["in_time"], "%H:%M:%S")
-                    if in_time > (shift_start + grace_period):
-                        late_count += 1
-                except:
-                    pass
-
-        on_leave_today = sum(1 for leave in leaves if leave["date"] == today_str)
-
-        absent_today = max(0, total_users - (present_today + on_leave_today))
+        today_stats = self.api.get_dashboard_summary().get("data", {})
 
         return {
-            "total": total_users,
-            "present": present_today,
-            "late": late_count,
-            "leave": on_leave_today,
-            "absent": absent_today,
+            "total": today_stats.get("totalEmployees", 0),
+            "present": today_stats.get("present", 0),
+            "late": today_stats.get("late", 0),
+            "leave": today_stats.get("onLeave", 0),
+            "absent": today_stats.get("absent", 0),
         }
 
     def _update_summary_cards(self, stats):
@@ -1364,6 +1396,27 @@ class AttendanceSystem:
         pie_layout = QVBoxLayout(self.ui.chart_container_pie)
         pie_layout.setContentsMargins(0, 0, 0, 0)
         pie_layout.addWidget(pie_chart_view)
+
+    def sync_attendance_to_cloud(self):
+        print("👀 QTimer is checking for data...")
+        pending_records = self.cache_db.get_pending_attendance()
+        if not pending_records:
+            return
+
+        for record in pending_records:
+            emp_id = record["emp_id"]
+            timestamp = record["timestamp"]
+            record_id = record["id"]
+
+            response = self.api.mark_attendance(emp_id, timestamp)
+
+            if response["success"]:
+                self.cache_db.delete_pending_attendance(record_id)
+                print(f"Synced attendance for Employee ID: {emp_id} at {timestamp}")
+
+            else:
+                print(f"⚠️ Network Offline or Cloud Error. Pausing sync for {emp_id}.")
+                break
 
 
 if __name__ == "__main__":

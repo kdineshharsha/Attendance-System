@@ -102,7 +102,7 @@ class DBManager:
     def load_users(self):
         conn = self.get_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, name, age, details, embedding FROM users")
+        cursor.execute("SELECT id, name, age,email, details, embedding FROM users")
         rows = cursor.fetchall()
         users_data = []
         for row in rows:
@@ -110,8 +110,9 @@ class DBManager:
                 "id": row[0],
                 "name": row[1],
                 "age": row[2],
-                "details": row[3],
-                "embedding": np.array(json.loads(row[4])),
+                "email": row[3],
+                "details": row[4],
+                "embedding": np.array(json.loads(row[5])),
                 # "embedding": json.loads(row[4]),
             }
             users_data.append(user)
@@ -405,6 +406,26 @@ class DBManager:
             (start, end, grace, min_ot),
         )
         conn.commit()
+
+    def get_user_by_id(self, user_id):
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, name, age, email, details, embedding FROM users WHERE id = ?",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            user = {
+                "id": row[0],
+                "name": row[1],
+                "age": row[2],
+                "email": row[3],
+                "details": row[4],
+                "embedding": np.array(json.loads(row[5])),
+            }
+            return user
+        return None
 
 
 if __name__ == "__main__":

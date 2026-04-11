@@ -468,39 +468,39 @@
              </layout>
             </item>
             <item>
-             <layout class="QVBoxLayout" name="verticalLayout_reg_form">
-              <item><widget class="QLabel" name="label_id"><property name="text"><string>Student ID / Emp ID:</string></property></widget></item>
-              <item><widget class="QLineEdit" name="txt_reg_id"><property name="placeholderText"><string>Enter ID (e.g. STU-001)</string></property></widget></item>
-              <item><widget class="QLabel" name="label"><property name="text"><string>Full Name:</string></property></widget></item>
-              <item><widget class="QLineEdit" name="txt_reg_name"><property name="placeholderText"><string>Enter person's name</string></property></widget></item>
-              <item><widget class="QLabel" name="label_2"><property name="text"><string>Age:</string></property></widget></item>
-              <item>
-               <widget class="QSpinBox" name="spin_reg_age">
-                <property name="minimum"><number>1</number></property>
-                <property name="maximum"><number>120</number></property>
-                <property name="value"><number>25</number></property>
-               </widget>
+ <layout class="QVBoxLayout" name="verticalLayout_reg_form">
+               <item><widget class="QLabel" name="label_id"><property name="text"><string>Student ID / Emp ID:</string></property></widget></item>
+               <item><widget class="QLineEdit" name="txt_reg_id"><property name="placeholderText"><string>Enter ID (e.g. EMP-001)</string></property></widget></item>
+               
+               <item><widget class="QLabel" name="label"><property name="text"><string>Full Name:</string></property></widget></item>
+               <item><widget class="QLineEdit" name="txt_reg_name"><property name="placeholderText"><string>Enter person's name</string></property></widget></item>
+               
+               <item>
+                <widget class="QLabel" name="lbl_reg_email">
+                 <property name="text">
+                  <string>Email Address:</string>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="txt_reg_email">
+                 <property name="placeholderText">
+                  <string>user@example.com</string>
+                 </property>
+                </widget>
+               </item>
 
-              </item>
-              <item>
-               <widget class="QLabel" name="lbl_reg_email">
-                <property name="text">
-                 <string>Email Address:</string>
-                </property>
-               </widget>
-              </item>
-              <item>
-               <widget class="QLineEdit" name="txt_reg_email">
-                <property name="placeholderText">
-                 <string>user@example.com</string>
-                </property>
-               </widget>
-              </item>
-              <item><widget class="QLabel" name="label_3"><property name="text"><string>Other Details (Role / Dept):</string></property></widget></item>
-              <item><widget class="QTextEdit" name="txt_reg_details"><property name="maximumSize"><size><width>16777215</width><height>100</height></size></property></widget></item>
-              <item><spacer name="verticalSpacer_reg_form"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
-              <item><widget class="QPushButton" name="btn_reg_save"><property name="minimumSize"><size><width>0</width><height>50</height></size></property><property name="font"><font><family>Segoe UI</family><bold>true</bold></font></property><property name="text"><string>💾 Save to Database</string></property></widget></item>
-             </layout>
+               <item><widget class="QLabel" name="lbl_reg_designation"><property name="text"><string>Designation:</string></property></widget></item>
+               <item><widget class="QLineEdit" name="txt_reg_designation"><property name="placeholderText"><string>e.g. Software Engineer, Manager</string></property></widget></item>
+
+               <item><widget class="QLabel" name="lbl_reg_salary"><property name="text"><string>Basic Salary (Rs.):</string></property></widget></item>
+               <item><widget class="QLineEdit" name="txt_reg_salary"><property name="placeholderText"><string>e.g. 75000</string></property></widget></item>
+
+               
+               
+               <item><spacer name="verticalSpacer_reg_form"><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
+               <item><widget class="QPushButton" name="btn_reg_save"><property name="minimumSize"><size><width>0</width><height>50</height></size></property><property name="font"><font><family>Segoe UI</family><bold>true</bold></font></property><property name="text"><string>💾 Save to Database</string></property></widget></item>
+              </layout>
             </item>
            </layout>
           </widget>

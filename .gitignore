@@ -9,3 +9,5 @@ main.py
 shape_predictor_68_face_landmarks.dat
 dataset
 test.ui
+.env
+test_smtp.py
