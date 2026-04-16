@@ -471,6 +471,50 @@ class APIManager:
                 "data": [],
             }
 
+    def generate_bulk_payroll(
+        self, month, from_date, to_date, standard_working_days, actual_open_days
+    ):
+        url = f"{self.base_url}/api/payroll/generate"
+
+        payload = {
+            "month": month,
+            "from_date": from_date,
+            "to_date": to_date,
+            "standard_working_days": standard_working_days,
+            "actual_open_days": actual_open_days,
+        }
+
+        try:
+            response = requests.post(url, json=payload)
+            result = response.json()
+
+            if response.status_code in [200, 201]:
+                return {
+                    "success": True,
+                    "message": result.get("message", "Payroll generated successfully"),
+                    "data": result.get("data", []),
+                }
+            elif response.status_code == 400:
+                return {
+                    "success": False,
+                    "error_type": "ClientError",
+                    "message": result.get("message", "Invalid input data"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "error_type": "ServerError",
+                    "message": result.get(
+                        "message", f"Server returned {response.status_code}"
+                    ),
+                }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "error_type": "ConnectionError",
+                "message": "Cannot connect to Node.js server. Is it running?",
+            }
+
 
 if __name__ == "__main__":
     db = APIManager()

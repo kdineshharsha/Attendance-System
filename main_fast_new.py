@@ -1,3 +1,5 @@
+from re import A
+
 import pandas as pd
 import os
 import face_recognition
@@ -230,6 +232,28 @@ class EmailSenderThread(QThread):
             self.finished_signal.emit(self.to_email, False)
 
 
+class PayrollGeneratorThread(QThread):
+    success_signal = Signal(dict)
+    error_signal = Signal(str)
+
+    def __init__(self, api, payload):
+        super().__init__()
+        self.api = APIManager()
+        self.payload = payload
+
+    def run(self):
+        try:
+
+            response = self.api.generate_bulk_payroll(self.payload)
+
+            if response.get("success"):
+                self.success_signal.emit(response)
+            else:
+                self.error_signal.emit(response.get("message", "Unknown Server Error"))
+        except Exception as e:
+            self.error_signal.emit(str(e))
+
+
 class AttendanceSystem:
     def __init__(self):
         loader = QUiLoader()
@@ -273,8 +297,9 @@ class AttendanceSystem:
         self.ui.btn_nav_scan.clicked.connect(lambda: self.switch_page(1))
         self.ui.btn_nav_attendance.clicked.connect(lambda: self.switch_page(2))
         self.ui.btn_nav_users.clicked.connect(lambda: self.switch_page(3))
-        self.ui.btn_nav_reports.clicked.connect(lambda: self.switch_page(4))
-        self.ui.btn_nav_settings.clicked.connect(lambda: self.switch_page(5))
+        self.ui.btn_nav_payroll.clicked.connect(lambda: self.switch_page(4))
+        self.ui.btn_nav_reports.clicked.connect(lambda: self.switch_page(5))
+        self.ui.btn_nav_settings.clicked.connect(lambda: self.switch_page(6))
         self.current_settings = self.db.get_settings()
         self.load_settings_to_ui()
 
@@ -285,6 +310,14 @@ class AttendanceSystem:
             QDate(current_date.year(), current_date.month(), 1)
         )
         self.ui.dateEdit_to.setDate(current_date)
+        self.ui.btn_run_payroll.clicked.connect(self.handle_run_payroll)
+
+        current_date = QDate.currentDate()
+        self.ui.dateEdit_pr_month.setDate(current_date)
+        self.ui.dateEdit_pr_from.setDate(
+            QDate(current_date.year(), current_date.month(), 1)
+        )
+        self.ui.dateEdit_pr_to.setDate(current_date)
         self.update_dashboard()
         self.load_all_users()
         self.load_all_attendance()
@@ -309,6 +342,7 @@ class AttendanceSystem:
             self.ui.btn_nav_scan,
             self.ui.btn_nav_attendance,
             self.ui.btn_nav_users,
+            self.ui.btn_nav_payroll,
             self.ui.btn_nav_reports,
             self.ui.btn_nav_settings,
         ]
@@ -813,10 +847,10 @@ class AttendanceSystem:
             )
 
     def generate_leave_history_report(self, start_date, end_date):
-        data = self.db.get_leaves_by_date_range(start_date, end_date)
-        self.ui.table_report_preview.setColumnCount(5)
+        data = self.api.get_leaves_by_date_range(start_date, end_date).get("data", [])
+        self.ui.table_report_preview.setColumnCount(6)
         self.ui.table_report_preview.setHorizontalHeaderLabels(
-            ["Date", "Emp ID", "Name", "Leave Type", "Reason / Notes"]
+            ["Date", "Emp ID", "Name", "Leave Type", "Reason / Notes", "Status"]
         )
         self.ui.table_report_preview.setRowCount(len(data))
 
@@ -824,14 +858,15 @@ class AttendanceSystem:
         self.ui.table_report_preview.setColumnWidth(1, 120)  # ID
         self.ui.table_report_preview.setColumnWidth(2, 150)  # Name
         self.ui.table_report_preview.setColumnWidth(3, 150)  # Type
-        self.ui.table_report_preview.setColumnWidth(4, 300)  # Reason
+        self.ui.table_report_preview.setColumnWidth(4, 250)  # Reason
 
         for row_idx, record in enumerate(data):
+            print(record)
             self.ui.table_report_preview.setItem(
                 row_idx, 0, QTableWidgetItem(record["date"])
             )
             self.ui.table_report_preview.setItem(
-                row_idx, 1, QTableWidgetItem(record["user_id"])
+                row_idx, 1, QTableWidgetItem(record["emp_id"])
             )
             self.ui.table_report_preview.setItem(
                 row_idx, 2, QTableWidgetItem(record["name"])
@@ -848,6 +883,10 @@ class AttendanceSystem:
             self.ui.table_report_preview.setItem(row_idx, 3, type_item)
             self.ui.table_report_preview.setItem(
                 row_idx, 4, QTableWidgetItem(record["reason"] or "--")
+            )
+
+            self.ui.table_report_preview.setItem(
+                row_idx, 5, QTableWidgetItem(record["status"] or "--")
             )
 
         if len(data) > 0:
@@ -907,7 +946,6 @@ class AttendanceSystem:
             return item
 
         for row_idx, record in enumerate(payroll_records):
-            print(record)
 
             emp_id = record.get("emp_id", "--")
             user_info = record.get("user", {})
@@ -1574,6 +1612,69 @@ class AttendanceSystem:
             return f"{hours}h"
         else:
             return f"{remaining_mins}m"
+
+    def handle_run_payroll(self):
+        month = self.ui.dateEdit_pr_month.date().toString("yyyy-MM")
+        from_date = self.ui.dateEdit_pr_from.date().toString("yyyy-MM-dd")
+        to_date = self.ui.dateEdit_pr_to.date().toString("yyyy-MM-dd")
+        actual_open_days = self.ui.spin_pr_actual.value()
+
+        std_days = self.ui.spin_std_days.value()
+
+        if actual_open_days > std_days:
+            QMessageBox.warning(
+                self.ui,
+                "Validation Error",
+                "Actual Open Days cannot be greater than Standard Working Days.",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self.ui,
+            "Confirm Payroll Generation",
+            f"Are you sure you want to generate payroll for {month}?\n\nFrom: {from_date}\nTo: {to_date}\nOpen Days: {actual_open_days}",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if reply == QMessageBox.No:
+            return
+
+        self.ui.btn_run_payroll.setEnabled(False)
+        self.ui.btn_run_payroll.setText("⚙️ Processing Payroll... Please Wait")
+
+        payload = {
+            "month": month,
+            "from_date": from_date,
+            "to_date": to_date,
+            "standard_working_days": std_days,
+            "actual_open_days": actual_open_days,
+        }
+
+        self.pr_thread = PayrollGeneratorThread(self.api, payload)
+        self.pr_thread.success_signal.connect(self.on_payroll_success)
+        self.pr_thread.error_signal.connect(self.on_payroll_error)
+        self.pr_thread.start()
+
+    def on_payroll_success(self, response_data):
+        count = len(response_data.get("processed_users", []))
+        QMessageBox.information(
+            self.ui,
+            "Success! 🎉",
+            f"{response_data.get('message', 'Success')}\n\nProcessed Employees: {count}\n\nYou can now view the results in the 'Reports' section.",
+        )
+        self.reset_pr_button()
+
+    def on_payroll_error(self, error_msg):
+        QMessageBox.critical(
+            self.ui,
+            "Generation Failed ❌",
+            f"An error occurred while generating payroll:\n\n{error_msg}",
+        )
+        self.reset_pr_button()
+
+    def reset_pr_button(self):
+        self.ui.btn_run_payroll.setEnabled(True)
+        self.ui.btn_run_payroll.setText("🚀 Run Payroll Engine")
 
 
 if __name__ == "__main__":

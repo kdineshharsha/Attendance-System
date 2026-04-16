@@ -26,8 +26,8 @@
     /* Nested Sub-Tabs Styling (Pill Shape) */
     QTabWidget::pane { border: 1px solid #313244; background: #181825; border-radius: 8px; top: 12px; }
     QTabBar::tab { background: #1e1e2e; border: 1px solid #45475a; color: #bac2de; padding: 8px 20px; margin-right: 12px; border-radius: 15px; font-weight: bold; font-size: 12px; }
-    QTabWidget#tabWidget_attendance > QTabBar::tab:selected { background: #a6e3a1; border: 1px solid #a6e3a1; color: #11111b; } 
-    QTabWidget#tabWidget_users > QTabBar::tab:selected { background: #cba6f7; border: 1px solid #cba6f7; color: #11111b; } 
+    QTabWidget#tabWidget_attendance &gt; QTabBar::tab:selected { background: #a6e3a1; border: 1px solid #a6e3a1; color: #11111b; } 
+    QTabWidget#tabWidget_users &gt; QTabBar::tab:selected { background: #cba6f7; border: 1px solid #cba6f7; color: #11111b; } 
     QTabBar::tab:hover:!selected { background: #313244; }
 
     /* Input Fields &amp; Buttons */
@@ -44,6 +44,7 @@
     QPushButton#btn_scan_stop, QPushButton#btn_leave_delete { background-color: #f38ba8; color: #11111b; } 
     QPushButton#btn_user_edit { background-color: #cba6f7; color: #11111b; } 
     QPushButton#btn_refresh_att { background-color: #89dceb; color: #11111b; }
+    QPushButton#btn_run_payroll { background-color: #a6e3a1; color: #11111b; font-size: 14px; padding: 12px; }
 
     /* Dashboard Cards */
     QWidget#card_1, QWidget#card_2, QWidget#card_3, QWidget#card_4 { background-color: #313244; border-radius: 12px; border: 1px solid #45475a; }
@@ -120,6 +121,12 @@
         </widget>
        </item>
        <item>
+        <widget class="QPushButton" name="btn_nav_payroll">
+         <property name="text"><string> Payroll Processing</string></property>
+         <property name="iconSize"><size><width>20</width><height>20</height></size></property>
+        </widget>
+       </item>
+       <item>
         <widget class="QPushButton" name="btn_nav_reports">
          <property name="text"><string> Reports</string></property>
          <property name="icon"><iconset><normaloff>icons/report.svg</normaloff>icons/report.svg</iconset></property>
@@ -141,6 +148,7 @@
     <item>
      <widget class="QStackedWidget" name="stackedWidget">
       <property name="currentIndex"><number>0</number></property> 
+
       <widget class="QWidget" name="page_dashboard">
        <layout class="QVBoxLayout" name="verticalLayout_dash">
         <property name="spacing"><number>25</number></property>
@@ -514,6 +522,107 @@
        </layout>
       </widget>
 
+      <widget class="QWidget" name="page_payroll">
+       <layout class="QVBoxLayout" name="verticalLayout_pr">
+        <property name="spacing"><number>20</number></property>
+        <property name="leftMargin"><number>30</number></property>
+        <property name="topMargin"><number>30</number></property>
+        <property name="rightMargin"><number>30</number></property>
+        <property name="bottomMargin"><number>30</number></property>
+        
+        <item>
+         <widget class="QLabel" name="lbl_pr_title">
+          <property name="font"><font><family>Segoe UI</family><pointsize>20</pointsize><bold>true</bold></font></property>
+          <property name="text"><string>⚙️ Run Payroll Engine</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lbl_pr_desc">
+          <property name="text"><string>Generate payroll records for a specific month based on attendance and leaves.</string></property>
+          <property name="styleSheet"><string>color: #a6adc8; margin-bottom: 10px;</string></property>
+         </widget>
+        </item>
+
+        <item>
+         <widget class="QGroupBox" name="group_pr_config">
+          <property name="title"><string>Payroll Configuration</string></property>
+          <layout class="QFormLayout" name="formLayout_pr">
+           <property name="horizontalSpacing"><number>50</number></property>
+           <property name="verticalSpacing"><number>20</number></property>
+           <property name="topMargin"><number>20</number></property>
+           <property name="bottomMargin"><number>20</number></property>
+           <property name="leftMargin"><number>20</number></property>
+           
+           <item row="0" column="0">
+            <widget class="QLabel" name="lbl_pr_month">
+             <property name="text"><string>Target Month (yyyy-MM):</string></property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QDateEdit" name="dateEdit_pr_month">
+             <property name="displayFormat"><string>yyyy-MM</string></property>
+             <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
+            </widget>
+           </item>
+
+           <item row="1" column="0">
+            <widget class="QLabel" name="lbl_pr_from">
+             <property name="text"><string>Attendance From Date:</string></property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QDateEdit" name="dateEdit_pr_from">
+             <property name="displayFormat"><string>yyyy-MM-dd</string></property>
+             <property name="calendarPopup"><bool>true</bool></property>
+             <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
+            </widget>
+           </item>
+
+           <item row="2" column="0">
+            <widget class="QLabel" name="lbl_pr_to">
+             <property name="text"><string>Attendance To Date:</string></property>
+            </widget>
+           </item>
+           <item row="2" column="1">
+            <widget class="QDateEdit" name="dateEdit_pr_to">
+             <property name="displayFormat"><string>yyyy-MM-dd</string></property>
+             <property name="calendarPopup"><bool>true</bool></property>
+             <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
+            </widget>
+           </item>
+
+           <item row="3" column="0">
+            <widget class="QLabel" name="lbl_pr_actual">
+             <property name="text"><string>Actual Open Days this Month:</string></property>
+            </widget>
+           </item>
+           <item row="3" column="1">
+            <widget class="QSpinBox" name="spin_pr_actual">
+             <property name="maximum"><number>31</number></property>
+             <property name="value"><number>20</number></property>
+             <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        
+        <item>
+         <layout class="QHBoxLayout">
+          <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+          <item>
+           <widget class="QPushButton" name="btn_run_payroll">
+            <property name="text"><string>🚀 Run Payroll Engine</string></property>
+            <property name="minimumSize"><size><width>250</width><height>50</height></size></property>
+           </widget>
+          </item>
+          <item><spacer><property name="orientation"><enum>Qt::Orientation::Horizontal</enum></property></spacer></item>
+         </layout>
+        </item>
+        <item><spacer><property name="orientation"><enum>Qt::Orientation::Vertical</enum></property></spacer></item>
+       </layout>
+      </widget>
+
       <widget class="QWidget" name="page_reports">
        <layout class="QVBoxLayout" name="verticalLayout_rep">
         <property name="spacing"><number>15</number></property>
@@ -627,8 +736,32 @@
              <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
             </widget>
            </item>
-           
-           <item row="4" column="1">
+          </layout>
+         </widget>
+        </item>
+
+        <item>
+         <widget class="QGroupBox" name="group_payroll_settings">
+          <property name="title"><string>💰 Payroll Defaults</string></property>
+          <layout class="QFormLayout" name="formLayout_payroll_set">
+           <property name="horizontalSpacing"><number>50</number></property>
+           <property name="verticalSpacing"><number>20</number></property>
+           <property name="topMargin"><number>20</number></property>
+           <property name="bottomMargin"><number>20</number></property>
+           <property name="leftMargin"><number>20</number></property>
+           <item row="0" column="0">
+            <widget class="QLabel" name="lbl_set_std_days">
+             <property name="text"><string>Standard Working Days per Month:</string></property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QSpinBox" name="spin_std_days">
+             <property name="maximum"><number>31</number></property>
+             <property name="value"><number>20</number></property>
+             <property name="minimumSize"><size><width>150</width><height>0</height></size></property>
+            </widget>
+           </item>
+           <item row="1" column="1">
             <widget class="QPushButton" name="btn_save_settings">
              <property name="text"><string>💾 Save Configurations</string></property>
              <property name="minimumSize"><size><width>200</width><height>40</height></size></property>
