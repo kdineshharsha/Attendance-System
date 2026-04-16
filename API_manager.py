@@ -474,7 +474,7 @@ class APIManager:
     def generate_bulk_payroll(
         self, month, from_date, to_date, standard_working_days, actual_open_days
     ):
-        url = f"{self.base_url}/api/payroll/generate"
+        url = f"{self.base_url}/payroll/generate"
 
         payload = {
             "month": month,
@@ -493,6 +493,67 @@ class APIManager:
                     "success": True,
                     "message": result.get("message", "Payroll generated successfully"),
                     "data": result.get("data", []),
+                }
+            elif response.status_code == 400:
+                return {
+                    "success": False,
+                    "error_type": "ClientError",
+                    "message": result.get("message", "Invalid input data"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "error_type": "ServerError",
+                    "message": result.get(
+                        "message", f"Server returned {response.status_code}"
+                    ),
+                }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "error_type": "ConnectionError",
+                "message": "Cannot connect to Node.js server. Is it running?",
+            }
+
+    def get_settings(self):
+        url = f"{self.base_url}/settings"
+        try:
+            response = requests.get(url, timeout=5)
+            result = response.json()
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Settings fetched successfully",
+                    "data": result.get("data", {}),
+                }
+
+            else:
+                return {
+                    "success": False,
+                    "message": f"Server Error: {response.status_code}",
+                    "data": {},
+                }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+            return {
+                "success": False,
+                "message": "Cannot connect to Node.js server. Is it running?",
+                "data": {},
+            }
+
+    def update_settings(self, payload):
+        url = f"{self.base_url}/settings/"
+
+        try:
+            response = requests.put(url, json=payload, timeout=5)
+            result = response.json()
+
+            if response.status_code in [200, 201]:
+                return {
+                    "success": True,
+                    "message": result.get("message", "Settings updated successfully"),
                 }
             elif response.status_code == 400:
                 return {

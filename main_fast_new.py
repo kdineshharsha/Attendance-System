@@ -300,7 +300,7 @@ class AttendanceSystem:
         self.ui.btn_nav_payroll.clicked.connect(lambda: self.switch_page(4))
         self.ui.btn_nav_reports.clicked.connect(lambda: self.switch_page(5))
         self.ui.btn_nav_settings.clicked.connect(lambda: self.switch_page(6))
-        self.current_settings = self.db.get_settings()
+        self.current_settings = {}
         self.load_settings_to_ui()
 
         self.switch_page(0)
@@ -1267,14 +1267,37 @@ class AttendanceSystem:
             self.ui.btn_export_xl.setEnabled(True)
 
     def load_settings_to_ui(self):
+        try:
+            response = self.api.get_settings()
+            settings = response.get("data", {}) if response else {}
 
-        start_time = QTime.fromString(self.current_settings["start"], "HH:mm:ss")
-        end_time = QTime.fromString(self.current_settings["end"], "HH:mm:ss")
+            start_str = settings.get("shift_start_time", "08:00:00")
+            end_str = settings.get("shift_end_time", "17:00:00")
+            grace = settings.get("grace_period_mins", 15)
+            min_ot = settings.get("min_ot_mins", 30)
+            std_days = settings.get("standard_working_days", 22)
 
-        self.ui.timeEdit_start.setTime(start_time)
-        self.ui.timeEdit_end.setTime(end_time)
-        self.ui.spin_grace.setValue(self.current_settings["grace"])
-        self.ui.spin_ot.setValue(self.current_settings["min_ot"])
+            start_format = "HH:mm:ss" if len(start_str) > 5 else "HH:mm"
+            end_format = "HH:mm:ss" if len(end_str) > 5 else "HH:mm"
+
+            self.ui.timeEdit_start.setTime(QTime.fromString(start_str, start_format))
+            self.ui.timeEdit_end.setTime(QTime.fromString(end_str, end_format))
+            self.ui.spin_grace.setValue(grace)
+            self.ui.spin_ot.setValue(min_ot)
+            self.ui.spin_std_days.setValue(std_days)
+
+            self.current_settings = {
+                "start": start_str if len(start_str) > 5 else f"{start_str}:00",
+                "end": end_str if len(end_str) > 5 else f"{end_str}:00",
+                "grace": grace,
+                "min_ot": min_ot,
+                "std_days": std_days,
+            }
+        except Exception as e:
+            print(f"Error loading settings from API: {e}")
+            QMessageBox.warning(
+                self.ui, "Settings Error", "Could not load settings from the server."
+            )
 
     def save_settings(self):
 
@@ -1282,19 +1305,46 @@ class AttendanceSystem:
         end = self.ui.timeEdit_end.time().toString("HH:mm:ss")
         grace = self.ui.spin_grace.value()
         min_ot = self.ui.spin_ot.value()
+        std_days = self.ui.spin_std_days.value()
 
-        self.db.update_settings(start, end, grace, min_ot)
-
-        self.current_settings = {
-            "start": start,
-            "end": end,
-            "grace": grace,
-            "min_ot": min_ot,
+        payload = {
+            "shift_start_time": start,
+            "shift_end_time": end,
+            "grace_period_mins": grace,
+            "min_ot_mins": min_ot,
+            "standard_working_days": std_days,
         }
 
-        QMessageBox.information(
-            self.ui, "Success", "System Settings Updated Successfully!"
-        )
+        try:
+            response = self.api.update_settings(payload)
+
+            if response and response.get("success"):
+                self.current_settings = {
+                    "start": start,
+                    "end": end,
+                    "grace": grace,
+                    "min_ot": min_ot,
+                    "std_days": std_days,
+                }
+                QMessageBox.information(
+                    self.ui, "Success", "System Settings Updated Successfully! 🚀"
+                )
+            else:
+                error_msg = (
+                    response.get("message", "Unknown Server Error")
+                    if response
+                    else "No response"
+                )
+                QMessageBox.critical(
+                    self.ui, "Error", f"Failed to save settings:\n{error_msg}"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(self.ui, "Error", f"An error occurred:\n{str(e)}")
+
+        finally:
+            self.ui.btn_save_settings.setEnabled(True)
+            self.ui.btn_save_settings.setText("💾 Save Configurations")
         self.update_dashboard()
 
     def start_camera(self):
