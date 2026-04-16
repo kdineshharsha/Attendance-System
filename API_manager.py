@@ -7,7 +7,10 @@ import requests
 
 
 class APIManager:
-    def __init__(self, base_url="http://localhost:5000/api"):
+    def __init__(
+        self,
+        base_url="http://localhost:5000/api",
+    ):
         self.base_url = base_url
 
     def add_user(self, emp_id, name, email, designation, basic_salary, face_embedding):
@@ -239,6 +242,233 @@ class APIManager:
                 "success": False,
                 "message": "Cannot connect to Node.js server. Is it running?",
                 "data": {},
+            }
+
+    def add_leave(self, emp_id, date, leave_type, reason):
+        url = f"{self.base_url}/leaves/apply"
+
+        try:
+            response = requests.post(
+                url,
+                json={
+                    "emp_id": emp_id,
+                    "date": date,
+                    "leave_type": leave_type,
+                    "reason": reason,
+                    "status": "Approved",
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=5,
+            )
+
+            result = response.json()
+
+            if response.status_code in [200, 201]:
+                return {
+                    "success": True,
+                    "message": result.get("message", "Leave applied successfully"),
+                    "data": result.get("leave"),
+                }
+            elif response.status_code == 400:
+                return {
+                    "success": False,
+                    "error_type": "ClientError",
+                    "message": result.get("message", "Invalid input data"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "error_type": "ServerError",
+                    "message": result.get(
+                        "message", f"Server returned {response.status_code}"
+                    ),
+                }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "error_type": "ConnectionError",
+                "message": "Cannot connect to Node.js server. Is it running?",
+            }
+
+    def get_all_leaves(self):
+        url = f"{self.base_url}/leaves"
+        try:
+            response = requests.get(url, timeout=5)
+            result = response.json()
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Leaves fetched successfully",
+                    "data": result.get("data", []),
+                }
+
+            else:
+                return {
+                    "success": False,
+                    "message": f"Server Error: {response.status_code}",
+                    "data": [],
+                }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+            return {
+                "success": False,
+                "message": "Cannot connect to Node.js server. Is it running?",
+                "data": [],
+            }
+
+    def update_leave_status(self, leave_id, status):
+        url = f"{self.base_url}/leaves/status/"
+        payload = {"leave_id": leave_id, "status": status}
+
+        try:
+            response = requests.put(
+                url,
+                timeout=5,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            result = response.json()
+
+            if response.status_code in [200, 204]:
+                return {
+                    "success": True,
+                    "message": result.get("message", "Leave revoked successfully"),
+                }
+            elif response.status_code == 400:
+                return {
+                    "success": False,
+                    "error_type": "ClientError",
+                    "message": result.get("message", "Invalid leave ID"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "error_type": "ServerError",
+                    "message": result.get(
+                        "message", f"Server returned {response.status_code}"
+                    ),
+                }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "error_type": "ConnectionError",
+                "message": "Cannot connect to Node.js server. Is it running?",
+            }
+
+    def get_attendance_by_date_range(self, start_date, end_date):
+        url = f"{self.base_url}/attendance/report?start_date={start_date}&end_date={end_date}"
+        try:
+            response = requests.get(url, timeout=5)
+            result = response.json()
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Data fetched successfully",
+                    "data": result.get("data", []),
+                }
+
+            else:
+                return {
+                    "success": False,
+                    "message": f"Server Error: {response.status_code}",
+                    "data": [],
+                }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+            return {
+                "success": False,
+                "message": "Cannot connect to Node.js server. Is it running?",
+                "data": [],
+            }
+
+    def get_leaves_by_date_range(self, start_date, end_date):
+        url = (
+            f"{self.base_url}/leaves/report?start_date={start_date}&end_date={end_date}"
+        )
+        try:
+            response = requests.get(url, timeout=10)
+            result = response.json()
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Data fetched successfully",
+                    "data": result.get("data", []),
+                }
+
+            else:
+                return {
+                    "success": False,
+                    "message": f"Server Error: {response.status_code}",
+                    "data": [],
+                }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+            return {
+                "success": False,
+                "message": "Cannot connect to Node.js server. Is it running?",
+                "data": [],
+            }
+
+    def get_detailed_attendance_report(self, start_date, end_date):
+        url = f"{self.base_url}/attendance/detailed-attendance?emp_id&start_date={start_date}&end_date={end_date}"
+        try:
+            response = requests.get(url, timeout=10)
+            result = response.json()
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Data fetched successfully",
+                    "data": result.get("data", []),
+                }
+
+            else:
+                return {
+                    "success": False,
+                    "message": f"Server Error: {response.status_code}",
+                    "data": [],
+                }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+            return {
+                "success": False,
+                "message": "Cannot connect to Node.js server. Is it running?",
+                "data": [],
+            }
+
+    def get_payroll_summary_report(self, month):
+        url = f"{self.base_url}/payroll/report?month={month}"
+        try:
+            response = requests.get(url, timeout=10)
+            result = response.json()
+
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Data fetched successfully",
+                    "data": result.get("data", []),
+                }
+
+            else:
+                return {
+                    "success": False,
+                    "message": f"Server Error: {response.status_code}",
+                    "data": [],
+                }
+
+        except requests.exceptions.RequestException as e:
+            print(f"Connection Error: {e}")
+            return {
+                "success": False,
+                "message": "Cannot connect to Node.js server. Is it running?",
+                "data": [],
             }
 
 

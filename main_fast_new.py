@@ -258,7 +258,13 @@ class AttendanceSystem:
         self.ui.btn_user_edit.clicked.connect(self.handle_edit_user)
         self.ui.btn_leave_save.clicked.connect(self.handle_add_leave)
         self.ui.btn_refresh_att.clicked.connect(self.load_all_attendance)
-        self.ui.btn_leave_delete.clicked.connect(self.handle_delete_leave)
+        self.ui.btn_refresh_leaves.clicked.connect(self.load_all_leaves)
+        self.ui.btn_approve_leave.clicked.connect(
+            lambda: self.handle_leave_action("Approved")
+        )
+        self.ui.btn_reject_leave.clicked.connect(
+            lambda: self.handle_leave_action("Rejected")
+        )
         self.ui.btn_generate_report.clicked.connect(self.handle_generate_report)
         self.ui.btn_export_xl.clicked.connect(self.export_to_excel)
         self.ui.btn_save_settings.clicked.connect(self.save_settings)
@@ -353,7 +359,7 @@ class AttendanceSystem:
 
         self.reg_thread = RegistrationThread(
             self.reg_img_path,
-            id,
+            emp_id,
             name,
             email,
             designation,
@@ -508,9 +514,9 @@ class AttendanceSystem:
 
     def handle_add_leave(self):
 
-        user_id = self.ui.combo_leave_user.currentData()
+        emp_id = self.ui.combo_leave_user.currentData()
 
-        if not user_id:
+        if not emp_id:
             QMessageBox.warning(
                 self.ui, "Selection Error", "Please select a user to add leave."
             )
@@ -520,7 +526,7 @@ class AttendanceSystem:
         leave_type = self.ui.combo_leave_type.currentText()
         reason = self.ui.txt_leave_reason.toPlainText().strip()
 
-        success = self.db.add_leave(user_id, date, leave_type, reason)
+        success = self.api.add_leave(emp_id, date, leave_type, reason)
 
         if success:
             QMessageBox.information(self.ui, "Success", "Leave added successfully.")
@@ -529,21 +535,6 @@ class AttendanceSystem:
             self.ui.combo_leave_type.setCurrentIndex(0)
             self.ui.txt_leave_reason.clear()
             self.load_all_leaves()
-            user_data = self.db.get_user_by_id(user_id)
-            msg = f"✅ IN: Welcome {user_data['name']}!"
-            self.ui.lbl_status.setStyleSheet("color: #00FF00; font-weight: bold;")
-            self.ui.lbl_status.setText(msg)
-
-            user_email = ""
-            user_email = user_data["email"]
-            user_name = user_data["name"]
-            print(user_email, user_name)
-            if user_email and user_email != "--":
-                subject = f"Leave Confirmation: {date} 🎌"
-                body = f"Hi {user_name},\n\nThis is to confirm that your leave for {date} ({leave_type}) has been successfully recorded in the FaceRec System.\n\nReason: {reason if reason else 'Not Specified'}\n\nRest well and take care!\n\n- Admin"
-
-                self.email_thread = EmailSenderThread(user_email, subject, body)
-                self.email_thread.start()
 
         else:
             QMessageBox.warning(
@@ -551,7 +542,7 @@ class AttendanceSystem:
                 f"[⚠️ WARNING] A leave is already recorded for this user on {date}.",
             )
 
-    def handle_delete_leave(self):
+    def handle_leave_action(self, status):
         selected_row = self.ui.table_leaves.currentRow()
         if selected_row < 0:
             QMessageBox.warning(
@@ -561,25 +552,48 @@ class AttendanceSystem:
         name_item = self.ui.table_leaves.item(selected_row, 0)
 
         leave_id = name_item.data(Qt.UserRole)
-        success = self.db.revoke_leave(leave_id)
-        if success:
-            QMessageBox.information(self.ui, "Success", "Leave revoked successfully.")
-            self.load_all_leaves()
+        emp_name = self.ui.table_leaves.item(selected_row, 1).text()
+        current_status = self.ui.table_leaves.item(selected_row, 4).text()
+
+        if current_status == status:
+            QMessageBox.information(self.ui, "Info", f"Leave is already {status}.")
+            return
+        action_text = "approve" if status == "Approved" else "reject"
+        reply = QMessageBox.question(
+            self.ui,
+            "Confirm Action",
+            f"Do you want to {action_text} leave for {emp_name}?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            response = self.api.update_leave_status(leave_id, status)
+
+            if response.get("success"):
+                QMessageBox.information(
+                    self.ui, "Success", f"Leave {status} successfully!"
+                )
+
+                self.load_all_leaves()
+                self.update_dashboard()
+            else:
+                error_msg = response.get(
+                    "message", "Something went wrong in the server."
+                )
+                QMessageBox.critical(
+                    self.ui, "Error", f"Failed to update leave:\n{error_msg}"
+                )
 
     def load_all_attendance(self):
-        # attendance_data = self.db.get_attendance_for_table()
         attendance_response = self.api.get_daily_attendance()
         attendance_data = attendance_response.get("data", [])
         self.ui.table_attendance.setRowCount(len(attendance_data))
         self.ui.table_attendance.setColumnWidth(0, 150)
         self.ui.table_attendance.setColumnWidth(1, 150)
-        # print(attendance_data)
         for row_idx, attendance_record in enumerate(attendance_data):
 
             in_time_str = attendance_record["in_time"]
             out_time_str = attendance_record["out_time"]
 
-            # print(attendance_record)
             self.ui.table_attendance.setItem(
                 row_idx, 0, QTableWidgetItem(attendance_record["user_id"])
             )
@@ -615,27 +629,34 @@ class AttendanceSystem:
             self.ui.table_attendance.setItem(row_idx, 5, status_item)
 
     def load_all_leaves(self):
-        leaves_data = self.db.get_all_leaves()
+        leaves_data = self.api.get_all_leaves().get("data", [])
         self.ui.table_leaves.setRowCount(len(leaves_data))
 
-        self.ui.table_leaves.setColumnWidth(0, 150)  # User Info
+        self.ui.table_leaves.setColumnWidth(0, 100)  # User Info
         self.ui.table_leaves.setColumnWidth(1, 150)  # Name
         self.ui.table_leaves.setColumnWidth(2, 100)  # Date
         self.ui.table_leaves.setColumnWidth(3, 120)  # Type
         self.ui.table_leaves.setColumnWidth(4, 200)  # Notes
 
         for row_idx, leave in enumerate(leaves_data):
-            name_item = QTableWidgetItem(leave["user_id"])
+            name_item = QTableWidgetItem(leave["emp_id"])
 
-            name_item.setData(Qt.UserRole, leave["id"])
+            name_item.setData(Qt.UserRole, leave["_id"])
             self.ui.table_leaves.setItem(row_idx, 0, name_item)
-            self.ui.table_leaves.setItem(row_idx, 1, QTableWidgetItem(leave["name"]))
-            self.ui.table_leaves.setItem(row_idx, 2, QTableWidgetItem(leave["date"]))
+            self.ui.table_leaves.setItem(
+                row_idx, 1, QTableWidgetItem(leave["user"]["name"])
+            )
+            self.ui.table_leaves.setItem(
+                row_idx, 2, QTableWidgetItem(leave["date"].split("T")[0])
+            )
             self.ui.table_leaves.setItem(
                 row_idx, 3, QTableWidgetItem(leave["leave_type"])
             )
             self.ui.table_leaves.setItem(
-                row_idx, 4, QTableWidgetItem(leave["reason"] or "--")
+                row_idx, 4, QTableWidgetItem(leave["status"] or "--")
+            )
+            self.ui.table_leaves.setItem(
+                row_idx, 5, QTableWidgetItem(leave["reason"] or "--")
             )
 
     def calculate_times(self, in_time_str, out_time_str):
@@ -686,12 +707,12 @@ class AttendanceSystem:
     def load_users_to_leave_dropdown(self):
         self.ui.combo_leave_user.clear()
 
-        users = self.db.get_users_for_table()
+        users = self.api.get_users_for_table().get("data", [])
         search_list = []
 
         for user in users:
-            display_text = f"{user['name']} (ID: {user['id']})"
-            self.ui.combo_leave_user.addItem(display_text, user["id"])
+            display_text = f"{user['name']} (ID: {user['emp_id']})"
+            self.ui.combo_leave_user.addItem(display_text, user["emp_id"])
             search_list.append(display_text)
         self.ui.combo_leave_user.lineEdit().setPlaceholderText("-- Select User --")
 
@@ -723,7 +744,9 @@ class AttendanceSystem:
 
     def generate_detailed_attendance_report(self, start_date, end_date):
 
-        data = self.db.get_attendance_by_date_range(start_date, end_date)
+        data = self.api.get_detailed_attendance_report(start_date, end_date).get(
+            "data", []
+        )
 
         self.ui.table_report_preview.setColumnCount(7)
         self.ui.table_report_preview.setHorizontalHeaderLabels(
@@ -740,23 +763,26 @@ class AttendanceSystem:
         self.ui.table_report_preview.setColumnWidth(6, 120)  # Status
 
         for row_idx, record in enumerate(data):
+
+            ot_val_formated = self._format_time_display(record["ot_minutes"])
+
             in_time = record["in_time"] or "--"
             out_time = record["out_time"] or "--"
-
-            late_val, ot_val = self.calculate_times(in_time, out_time)
+            late_val = record["late_minutes"] or "--"
+            ot_val = ot_val_formated or "--"
 
             late_ot_item = QTableWidgetItem()
             if late_val != "--":
                 late_ot_item.setText(f"- {late_val}")
-                late_ot_item.setForeground(QColor("#f38ba8"))  # රතු පාටින්
+                late_ot_item.setForeground(QColor("#f38ba8"))
             elif ot_val != "--":
                 late_ot_item.setText(ot_val)
-                late_ot_item.setForeground(QColor("#a6e3a1"))  # කොළ පාටින්
+                late_ot_item.setForeground(QColor("#a6e3a1"))
             else:
                 late_ot_item.setText("-")
 
             status_item = QTableWidgetItem()
-            if record["leave_type"] == "Early Leave":
+            if record["status"] == "On Leave":
                 status_item.setText("🟡 Early Left")
             elif late_val != "--":
                 status_item.setText("🔴 Late")
@@ -767,7 +793,7 @@ class AttendanceSystem:
                 row_idx, 0, QTableWidgetItem(record["date"])
             )
             self.ui.table_report_preview.setItem(
-                row_idx, 1, QTableWidgetItem(record["user_id"])
+                row_idx, 1, QTableWidgetItem(record["emp_id"])
             )
             self.ui.table_report_preview.setItem(
                 row_idx, 2, QTableWidgetItem(record["name"])
@@ -835,105 +861,190 @@ class AttendanceSystem:
 
     def generate_payroll_summary_report(self, start_date, end_date):
 
-        all_users = self.db.get_users_for_table()
-        attendance_data = self.db.get_attendance_by_date_range(start_date, end_date)
-        leaves_data = self.db.get_leaves_by_date_range(start_date, end_date)
+        month_str = start_date[:7]
+        print(f"Fetching payroll for month: {month_str}")
 
-        payroll_records = []
+        payroll_records = self.api.get_payroll_summary_report(month_str).get("data", [])
 
-        for user in all_users:
-            user_id = user["id"]
-
-            total_present = 0
-            total_leaves = 0
-            total_ot_seconds = 0
-            total_late_seconds = 0
-
-            for record in attendance_data:
-                if record["user_id"] == user_id:
-                    total_present += 1
-
-                    late_sec, ot_sec = self.calculate_times_in_seconds(
-                        record["in_time"], record["out_time"]
-                    )
-
-                    total_late_seconds += late_sec
-                    total_ot_seconds += ot_sec
-
-            for leave in leaves_data:
-                if leave["user_id"] == user_id:
-                    total_leaves += 1
-
-            total_late_mins = total_late_seconds / 60
-            company_grace_mins = 20
-
-            deduction_mins = 0
-            if total_late_mins > company_grace_mins:
-                deduction_mins = total_late_mins - company_grace_mins
-
-            total_ot_hrs = total_ot_seconds / 3600
-
-            if total_present > 0 or total_leaves > 0:
-                payroll_records.append(
-                    {
-                        "id": user_id,
-                        "name": user["name"],
-                        "present": total_present,
-                        "leaves": total_leaves,
-                        "ot_hrs": round(total_ot_hrs, 2),
-                        "deduction_mins": round(deduction_mins),
-                    }
-                )
-
-        self.ui.table_report_preview.setColumnCount(6)
+        self.ui.table_report_preview.setColumnCount(16)
         self.ui.table_report_preview.setHorizontalHeaderLabels(
             [
                 "Emp ID",
                 "Name",
-                "Total Present",
-                "Total Leaves",
-                "Total OT (Hrs)",
-                "Late Deduction (Mins)",
+                "Basic (Rs)",
+                "Worked/Open",
+                "Absent",
+                "Late (Mins)",
+                "OT (Hrs)",
+                "OT Pay",
+                "Bonus",
+                "Late Penalty",
+                "No-Pay",
+                "EPF (8%)",
+                "Gross Pay",
+                "Total Ded.",
+                "Net Pay",
+                "Status",
             ]
         )
+
         self.ui.table_report_preview.setRowCount(len(payroll_records))
 
-        self.ui.table_report_preview.setColumnWidth(0, 100)
-        self.ui.table_report_preview.setColumnWidth(1, 200)
-        self.ui.table_report_preview.setColumnWidth(2, 120)
-        self.ui.table_report_preview.setColumnWidth(3, 120)
-        self.ui.table_report_preview.setColumnWidth(4, 120)
-        self.ui.table_report_preview.setColumnWidth(5, 180)
+        self.ui.table_report_preview.setColumnWidth(0, 80)  # ID
+        self.ui.table_report_preview.setColumnWidth(1, 150)  # Name
+        self.ui.table_report_preview.setColumnWidth(2, 100)  # Basic
+        self.ui.table_report_preview.setColumnWidth(3, 100)  # Worked/Open
+        self.ui.table_report_preview.setColumnWidth(14, 120)  # Net Pay
+
+        def make_item(val, color_hex=None, bold=False):
+            item = QTableWidgetItem(str(val))
+            if color_hex:
+                item.setForeground(QColor(color_hex))
+            if bold:
+                font = item.font()
+                font.setBold(True)
+                item.setFont(font)
+            return item
 
         for row_idx, record in enumerate(payroll_records):
-            self.ui.table_report_preview.setItem(
-                row_idx, 0, QTableWidgetItem(record["id"])
+            print(record)
+
+            emp_id = record.get("emp_id", "--")
+            user_info = record.get("user", {})
+            name = (
+                user_info.get("name", "Unknown")
+                if isinstance(user_info, dict)
+                else "Unknown"
             )
-            self.ui.table_report_preview.setItem(
-                row_idx, 1, QTableWidgetItem(record["name"])
+            basic_salary = record.get("basic_salary_snapshot", 0)
+
+            att_summary = record.get("attendance_summary", {})
+            open_days = att_summary.get("actual_open_days", 0)
+            present_days = att_summary.get("present_days", 0)
+            absent_days = att_summary.get("absent_days", 0)
+            late_mins = att_summary.get("late_minutes", 0)
+            ot_mins = att_summary.get("ot_minutes", 0)
+            ot_hrs = round(ot_mins / 60, 2)
+
+            earnings_list = record.get("earnings", [])
+            ot_pay = next(
+                (
+                    item["amount"]
+                    for item in earnings_list
+                    if item["name"] == "Overtime Pay"
+                ),
+                0,
             )
-            self.ui.table_report_preview.setItem(
-                row_idx, 2, QTableWidgetItem(str(record["present"]))
-            )
-            self.ui.table_report_preview.setItem(
-                row_idx, 3, QTableWidgetItem(str(record["leaves"]))
+            bonus = next(
+                (
+                    item["amount"]
+                    for item in earnings_list
+                    if item["name"] == "Attendance Bonus"
+                ),
+                0,
             )
 
-            ot_item = QTableWidgetItem(str(record["ot_hrs"]))
-            if record["ot_hrs"] > 0:
-                ot_item.setForeground(QColor("#a6e3a1"))
-            self.ui.table_report_preview.setItem(row_idx, 4, ot_item)
+            deductions_list = record.get("deductions", [])
+            epf = next(
+                (
+                    item["amount"]
+                    for item in deductions_list
+                    if item["name"] == "EPF (8%)"
+                ),
+                0,
+            )
+            no_pay = next(
+                (
+                    item["amount"]
+                    for item in deductions_list
+                    if item["name"] == "No-Pay"
+                ),
+                0,
+            )
+            late_penalty = next(
+                (
+                    item["amount"]
+                    for item in deductions_list
+                    if item["name"] == "Late Penalty"
+                ),
+                0,
+            )
 
-            deduct_item = QTableWidgetItem(str(record["deduction_mins"]))
-            if record["deduction_mins"] > 0:
-                deduct_item.setForeground(QColor("#f38ba8"))
-            self.ui.table_report_preview.setItem(row_idx, 5, deduct_item)
+            gross_pay = record.get("gross_pay", 0)
+            total_ded = record.get("total_deductions", 0)
+            net_pay = record.get("net_pay", 0)
+            status = record.get("status", "Pending")
+
+            self.ui.table_report_preview.setItem(row_idx, 0, make_item(emp_id))
+            self.ui.table_report_preview.setItem(row_idx, 1, make_item(name))
+            self.ui.table_report_preview.setItem(
+                row_idx, 2, make_item(f"{basic_salary:,.2f}")
+            )
+
+            self.ui.table_report_preview.setItem(
+                row_idx, 3, make_item(f"{present_days}/{open_days}")
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx,
+                4,
+                make_item(absent_days, "#f38ba8" if absent_days > 0 else None),
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 5, make_item(late_mins, "#f38ba8" if late_mins > 0 else None)
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 6, make_item(ot_hrs, "#a6e3a1" if ot_hrs > 0 else None)
+            )
+
+            self.ui.table_report_preview.setItem(
+                row_idx,
+                7,
+                make_item(f"{ot_pay:,.2f}", "#a6e3a1" if ot_pay > 0 else None),
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 8, make_item(f"{bonus:,.2f}", "#a6e3a1" if bonus > 0 else None)
+            )
+
+            self.ui.table_report_preview.setItem(
+                row_idx,
+                9,
+                make_item(
+                    f"{late_penalty:,.2f}", "#f38ba8" if late_penalty > 0 else None
+                ),
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx,
+                10,
+                make_item(f"{no_pay:,.2f}", "#f38ba8" if no_pay > 0 else None),
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 11, make_item(f"{epf:,.2f}", "#f38ba8" if epf > 0 else None)
+            )
+
+            self.ui.table_report_preview.setItem(
+                row_idx, 12, make_item(f"{gross_pay:,.2f}")
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx,
+                13,
+                make_item(f"{total_ded:,.2f}", "#f38ba8" if total_ded > 0 else None),
+            )
+            self.ui.table_report_preview.setItem(
+                row_idx, 14, make_item(f"{net_pay:,.2f}", "#89b4fa", bold=True)
+            )
+
+            status_color = "#a6e3a1" if status == "Paid" else "#f9e2af"
+            self.ui.table_report_preview.setItem(
+                row_idx, 15, make_item(status, status_color, bold=True)
+            )
 
         if len(payroll_records) > 0:
             self.ui.btn_export_xl.setEnabled(True)
         else:
             QMessageBox.information(
-                self.ui, "No Data", "No payroll data found for the selected date range."
+                self.ui,
+                "No Data",
+                f"No payroll data found for the month of {month_str}.",
             )
 
     def generate_master_summary_report(self, start_date, end_date):
@@ -1353,15 +1464,37 @@ class AttendanceSystem:
 
     def _update_charts(self, stats):
         days_labels, present_counts, late_counts, absent_counts = [], [], [], []
-        total_users = stats["total"]
+        total_users = stats.get("total", 0)
+
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=4)
+
+        start_str = start_date.strftime("%Y-%m-%d")
+        end_str = end_date.strftime("%Y-%m-%d")
+
+        att_response = self.api.get_attendance_by_date_range(start_str, end_str)
+
+        leaves_response = self.api.get_leaves_by_date_range(start_str, end_str)
+
+        all_att = att_response.get("data", []) if isinstance(att_response, dict) else []
+        all_leaves = (
+            leaves_response.get("data", []) if isinstance(leaves_response, dict) else []
+        )
 
         for i in range(4, -1, -1):
-            target_date = datetime.now() - timedelta(days=i)
+            target_date = end_date - timedelta(days=i)
             date_str = target_date.strftime("%Y-%m-%d")
             days_labels.append(target_date.strftime("%a"))
 
-            daily_att = self.db.get_attendance_by_date_range(date_str, date_str)
-            daily_leaves = self.db.get_leaves_by_date_range(date_str, date_str)
+            daily_att = [
+                r for r in all_att if r.get("date", "").split("T")[0] == date_str
+            ]
+            daily_leaves = [
+                r
+                for r in all_leaves
+                if r.get("date", "").split("T")[0] == date_str
+                and r.get("status") == "Approved"
+            ]
 
             daily_present = len(daily_att)
             daily_leave = len(daily_leaves)
@@ -1369,9 +1502,11 @@ class AttendanceSystem:
 
             daily_late = 0
             for rec in daily_att:
-                late_sec, _ = self.calculate_times_in_seconds(
-                    rec["in_time"], rec["out_time"]
-                )
+                in_time = rec.get("in_time", "--")
+                out_time = rec.get("out_time", "--")
+
+                late_sec, _ = self.calculate_times_in_seconds(in_time, out_time)
+
                 if late_sec > (self.current_settings["grace"] * 60):
                     daily_late += 1
 
@@ -1389,7 +1524,10 @@ class AttendanceSystem:
         bar_layout.addWidget(bar_chart_view)
 
         pie_chart_view = self.create_pie_chart(
-            stats["present"], stats["late"], stats["leave"], stats["absent"]
+            stats.get("present", 0),
+            stats.get("late", 0),
+            stats.get("leave", 0),
+            stats.get("absent", 0),
         )
         if self.ui.chart_container_pie.layout():
             QWidget().setLayout(self.ui.chart_container_pie.layout())
@@ -1417,6 +1555,25 @@ class AttendanceSystem:
             else:
                 print(f"⚠️ Network Offline or Cloud Error. Pausing sync for {emp_id}.")
                 break
+
+    def _format_time_display(self, minutes):
+        try:
+            mins = int(minutes)
+        except (ValueError, TypeError):
+            return "-"
+
+        if mins <= 0:
+            return "-"
+
+        hours = mins // 60
+        remaining_mins = mins % 60
+
+        if hours > 0 and remaining_mins > 0:
+            return f"{hours}h {remaining_mins}m"
+        elif hours > 0:
+            return f"{hours}h"
+        else:
+            return f"{remaining_mins}m"
 
 
 if __name__ == "__main__":
