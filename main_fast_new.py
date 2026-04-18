@@ -15,6 +15,10 @@ from PySide6.QtWidgets import (
     QCompleter,
     QVBoxLayout,
     QWidget,
+    QDialog,
+    QLabel,
+    QLineEdit,
+    QPushButton,
 )
 from PySide6.QtCharts import (
     QChart,
@@ -86,7 +90,7 @@ def ai_scan_worker(input_queue, output_queue, users_data):
 
 
 class RegistrationThread(QThread):
-    success_signal = Signal(str)
+    success_signal = Signal(str, str)
     error_signal = Signal(str)
 
     def __init__(self, reg_img_path, id, name, email, designation, basic_salary):
@@ -108,16 +112,25 @@ class RegistrationThread(QThread):
             embedding = face_recognition.face_encodings(target_image, model="cnn")[0]
 
             face_embedding = embedding
-            self.api.add_user(
+            response = self.api.add_user(
                 self.emp_id,
                 self.name,
                 self.email,
                 self.designation,
                 self.basic_salary,
                 face_embedding,
+                GLOBAL_AUTH_TOKEN,
             )
+            print(f"API Response: {response}")
+            if response.get("success"):
+                self.success_signal.emit(self.name, response.get("message"))
+            else:
+                self.error_signal.emit(
+                    response.get(
+                        "message",
+                    )
+                )
 
-            self.success_signal.emit(self.name)
         except ValueError:
             self.error_signal.emit("Face Not Detected")
         except Exception as e:
@@ -242,6 +255,7 @@ class PayrollGeneratorThread(QThread):
         self.payload = payload
 
     def run(self):
+
         try:
 
             response = self.api.generate_bulk_payroll(self.payload)
@@ -1727,11 +1741,127 @@ class AttendanceSystem:
         self.ui.btn_run_payroll.setText("🚀 Run Payroll Engine")
 
 
+class LoginWindow(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("System Login")
+        self.setFixedSize(350, 450)
+        self.setStyleSheet("background-color: #1e1e2e; color: #cdd6f4;")
+        self.token = None
+
+        layout = QVBoxLayout()
+        layout.setContentsMargins(30, 40, 30, 40)
+        layout.setSpacing(15)
+
+        self.lbl_title = QLabel("Welcome Back !")
+        self.lbl_title.setAlignment(Qt.AlignCenter)
+        self.lbl_title.setStyleSheet(
+            "font-size: 24px; font-weight: bold; color: #89b4fa; margin-bottom: 20px;"
+        )
+
+        self.lbl_subtitle = QLabel("Please login to your account")
+        self.lbl_subtitle.setAlignment(Qt.AlignCenter)
+        self.lbl_subtitle.setStyleSheet(
+            "font-size: 12px; color: #a6adc8; margin-bottom: 20px;"
+        )
+
+        self.lbl_id = QLabel("Employee ID")
+        self.lbl_id.setStyleSheet("font-weight: bold;")
+
+        self.txt_id = QLineEdit()
+        self.txt_id.setPlaceholderText("Enter your Employee ID")
+        self.txt_id.setStyleSheet(
+            "background-color: #313244; border: 1px solid #45475a; padding: 10px; border-radius: 8px; font-size: 14px;"
+        )
+
+        self.lbl_pass = QLabel("Password")
+        self.lbl_pass.setStyleSheet("font-weight: bold;")
+
+        self.txt_pass = QLineEdit()
+        self.txt_pass.setPlaceholderText("Enter your Password")
+        self.txt_pass.setEchoMode(QLineEdit.Password)
+        self.txt_pass.setStyleSheet(
+            "background-color: #313244; border: 1px solid #45475a; padding: 10px; border-radius: 8px; font-size: 14px;"
+        )
+
+        self.btn_login = QPushButton("Login")
+        self.btn_login.setCursor(Qt.PointingHandCursor)
+        self.btn_login.setStyleSheet(
+            """
+            QPushButton {
+                background-color: #89b4fa; 
+                color: #11111b; 
+                font-weight: bold; 
+                font-size: 16px;
+                padding: 12px; 
+                border-radius: 8px;
+                margin-top: 10px;
+            }
+            QPushButton:hover {
+                background-color: #b4befe;
+            }
+            QPushButton:pressed {
+                background-color: #74c7ec;
+            }
+            """
+        )
+        self.btn_login.clicked.connect(self.handle_login)
+
+        layout.addWidget(self.lbl_title)
+        layout.addWidget(self.lbl_subtitle)
+        layout.addWidget(self.lbl_id)
+        layout.addWidget(self.txt_id)
+        layout.addWidget(self.lbl_pass)
+        layout.addWidget(self.txt_pass)
+        layout.addStretch()
+        layout.addWidget(self.btn_login)
+
+        self.setLayout(layout)
+
+    def handle_login(self):
+        emp_id = self.txt_id.text().strip()
+        password = self.txt_pass.text().strip()
+
+        if not emp_id or not password:
+            QMessageBox.warning(self, "Error", "ID and password are required")
+            return
+
+        api = APIManager()
+        response = api.login_user(emp_id, password)
+
+        if response.get("success"):
+            user_data = response.get("data", {})
+            role = user_data.get("role")
+            if not role in ["Admin", "HR"]:
+                QMessageBox.warning(
+                    self,
+                    "Access Denied",
+                    "You do not have permission to access this system.",
+                )
+                return
+
+            self.token = response.get("token")
+            global GLOBAL_AUTH_TOKEN
+            GLOBAL_AUTH_TOKEN = self.token
+            self.accept()
+        else:
+            QMessageBox.warning(
+                self, "Failed", response.get("message", "Invalid credentials")
+            )
+
+
+GLOBAL_AUTH_TOKEN = None
+
 if __name__ == "__main__":
     mp.freeze_support()
     global_font = QFont("Segoe UI", 10)
     app = QApplication(sys.argv)
     app.setFont(global_font)
-    attendance_system = AttendanceSystem()
-    attendance_system.ui.show()
-    sys.exit(app.exec())
+
+    login_window = LoginWindow()
+    if login_window.exec() == QDialog.Accepted:
+        attendance_system = AttendanceSystem()
+        attendance_system.ui.show()
+        sys.exit(app.exec())
+    else:
+        sys.exit(0)

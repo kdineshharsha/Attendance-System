@@ -1,6 +1,7 @@
 from os import name
 from re import A
 import re
+import token
 from urllib import response
 
 import requests
@@ -13,7 +14,37 @@ class APIManager:
     ):
         self.base_url = base_url
 
-    def add_user(self, emp_id, name, email, designation, basic_salary, face_embedding):
+    def login_user(self, emp_id, password):
+        url = f"{self.base_url}/users/login"
+        payload = {"emp_id": emp_id, "password": password}
+        headers = {"Content-Type": "application/json"}
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=5)
+            result = response.json()
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "token": result.get("token"),
+                    "data": result.get("user"),
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": result.get("message", "Invalid credentials"),
+                }
+        except requests.exceptions.RequestException as e:
+            return {"success": False, "message": f"Connection failed: {e}"}
+
+    def add_user(
+        self,
+        emp_id,
+        name,
+        email,
+        designation,
+        basic_salary,
+        face_embedding,
+        GLOBAL_AUTH_TOKEN,
+    ):
         face_embedding = (
             face_embedding.tolist()
             if hasattr(face_embedding, "tolist")
@@ -28,8 +59,11 @@ class APIManager:
             "basic_salary": basic_salary,
             "face_embedding": face_embedding,
         }
-
-        headers = {"Content-Type": "application/json"}
+        token = GLOBAL_AUTH_TOKEN
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+        }
 
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=5)
