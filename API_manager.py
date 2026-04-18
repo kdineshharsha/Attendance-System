@@ -471,18 +471,8 @@ class APIManager:
                 "data": [],
             }
 
-    def generate_bulk_payroll(
-        self, month, from_date, to_date, standard_working_days, actual_open_days
-    ):
+    def generate_bulk_payroll(self, payload):
         url = f"{self.base_url}/payroll/generate"
-
-        payload = {
-            "month": month,
-            "from_date": from_date,
-            "to_date": to_date,
-            "standard_working_days": standard_working_days,
-            "actual_open_days": actual_open_days,
-        }
 
         try:
             response = requests.post(url, json=payload)
