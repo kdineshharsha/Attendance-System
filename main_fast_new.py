@@ -93,10 +93,9 @@ class RegistrationThread(QThread):
     success_signal = Signal(str, str)
     error_signal = Signal(str)
 
-    def __init__(self, reg_img_path, id, name, email, designation, basic_salary):
+    def __init__(self, reg_img_path, name, email, designation, basic_salary):
         super().__init__()
         self.reg_img_path = reg_img_path
-        self.emp_id = id
         self.name = name
         self.basic_salary = basic_salary
         self.email = email
@@ -113,7 +112,6 @@ class RegistrationThread(QThread):
 
             face_embedding = embedding
             response = self.api.add_user(
-                self.emp_id,
                 self.name,
                 self.email,
                 self.designation,
@@ -386,18 +384,18 @@ class AttendanceSystem:
         print("Capture Photo button clicked")
 
     def save_database(self):
-        emp_id = self.ui.txt_reg_id.text().strip()
+
         name = self.ui.txt_reg_name.text().strip()
         designation = self.ui.txt_reg_designation.text().strip()
         basic_salary = self.ui.txt_reg_salary.text().strip()
         email = self.ui.txt_reg_email.text().strip()
-        if not emp_id or not name:
+        if not email or not name:
             QMessageBox.warning(
-                self.ui, "Input Error", "ID and Name are required fields."
+                self.ui, "Input Error", "Email and Name are required fields."
             )
             return
         if self.ui.btn_reg_save.text() == "🔄️ Update User":
-            self.api.update_user(emp_id, name, email, designation, basic_salary)
+            self.api.update_user(name, email, designation, basic_salary)
             self.on_update_user_success(name)
             self.load_all_users()
 
@@ -407,7 +405,6 @@ class AttendanceSystem:
 
         self.reg_thread = RegistrationThread(
             self.reg_img_path,
-            emp_id,
             name,
             email,
             designation,

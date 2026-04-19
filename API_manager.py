@@ -37,7 +37,6 @@ class APIManager:
 
     def add_user(
         self,
-        emp_id,
         name,
         email,
         designation,
@@ -52,7 +51,6 @@ class APIManager:
         )
         url = f"{self.base_url}/users/register"
         payload = {
-            "emp_id": emp_id,
             "name": name,
             "email": email,
             "designation": designation,

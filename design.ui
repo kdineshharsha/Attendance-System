@@ -483,7 +483,7 @@
             <item>
              <layout class="QVBoxLayout" name="verticalLayout_reg_form">
               <item><widget class="QLabel" name="label_id"><property name="text"><string>Student ID / Emp ID:</string></property></widget></item>
-              <item><widget class="QLineEdit" name="txt_reg_id"><property name="placeholderText"><string>Enter ID (e.g. EMP-001)</string></property></widget></item>
+              <item><widget class="QLineEdit" name="txt_reg_id"><property name="placeholderText"><string>Employee ID (Auto Increment)</string></property><property name="readOnly"><bool>true</bool></property></widget></item>
               
               <item><widget class="QLabel" name="label"><property name="text"><string>Full Name:</string></property></widget></item>
               <item><widget class="QLineEdit" name="txt_reg_name"><property name="placeholderText"><string>Enter person's name</string></property></widget></item>
